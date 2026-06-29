@@ -13,6 +13,8 @@ dependencies = []
 
 [project.optional-dependencies]
 codex = ["openai-codex"]
+
+[dependency-groups]
 dev = ["ruff>=0.8.0"]
 
 [project.scripts]
@@ -25,3 +27,5 @@ where = ["src"]
 line-length = 100
 target-version = "py310"
 
+[tool.uv]
+required-version = "0.11.25"
