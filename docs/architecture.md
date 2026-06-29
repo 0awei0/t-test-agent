@@ -4,6 +4,8 @@
 
 Build the smallest useful demo for the hackathon's `AI 测试官` direction: a Codex-powered testing agent that can understand a testing request, inspect a repo, plan checks, run safe validation, and produce a decision-ready report.
 
+The backend is Python-first for the current phase. Frontend work is intentionally deferred until the test workflow, report schema, and evidence capture are stable.
+
 ## Shape
 
 ```text
@@ -25,6 +27,18 @@ Repo inspection, command execution, optional test edits
 Markdown report under reports/
 ```
 
+Later, the report output can feed a thin UI:
+
+```text
+Markdown / JSON report
+        |
+        v
+Static HTML or small Python web UI
+        |
+        v
+Timeline, risk, findings, screenshots, logs, and verdict
+```
+
 ## MVP Boundaries
 
 - Use Codex built-in code understanding, shell execution, and local project context.
@@ -32,6 +46,8 @@ Markdown report under reports/
 - Store report history as files first; move to a database only when the demo needs search or dashboards.
 - Keep TGit/TAPD/bot integrations as second-stage adapters.
 - Prefer dry-run prompt iteration before allowing Codex to modify files.
+- Keep all committed demo data synthetic or sanitized.
+- Run against real team code only in an authorized local or internal environment.
 
 ## Planned Milestones
 
@@ -41,4 +57,3 @@ Markdown report under reports/
 4. GitHub PR diff input.
 5. Scheduled smoke checks.
 6. Webhook/bot report delivery.
-
