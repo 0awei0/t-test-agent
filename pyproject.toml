@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "t-test-agent"
+version = "0.1.0"
+description = "AI Test Officer MVP powered by the Codex Python SDK."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "0awei0" }]
+dependencies = []
+
+[project.optional-dependencies]
+codex = ["openai-codex"]
+dev = ["ruff>=0.8.0"]
+
+[project.scripts]
+ai-test-officer = "ai_test_officer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
