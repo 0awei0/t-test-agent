@@ -12,7 +12,12 @@ authors = [{ name = "0awei0" }]
 dependencies = []
 
 [project.optional-dependencies]
-codex = ["openai-codex"]
+codex = [
+    # 0.1.0b2 pins openai-codex-cli-bin==0.132.0, which has no manylinux
+    # wheel. 0.1.0b3 pins a Linux-compatible CLI binary.
+    "openai-codex==0.1.0b3",
+]
+e2e = ["playwright>=1.53"]
 
 [dependency-groups]
 dev = ["ruff>=0.8.0"]
@@ -29,3 +34,4 @@ target-version = "py310"
 
 [tool.uv]
 required-version = "0.11.25"
+prerelease = "allow"

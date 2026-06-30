@@ -11,6 +11,9 @@ class TestTask:
     task: str
     repo_path: Path
     diff_path: Path | None = None
+    diff_text: str | None = None
+    diff_label: str | None = None
+    changed_files: str | None = None
     requirement_path: Path | None = None
     output_path: Path = Path("reports/latest-report.md")
     allow_edits: bool = False
@@ -24,3 +27,5 @@ class TestTask:
             return output
         return self.resolved_repo() / output
 
+    def has_change_context(self) -> bool:
+        return bool(self.diff_path or self.diff_text or self.changed_files)

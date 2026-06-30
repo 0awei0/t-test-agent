@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI Test Officer"
+  short_description: "Run test reports and scenario demos from local diffs, MR/TAPD context, and WeCom notifications."
+  default_prompt: "Use $ai-test-officer to analyze a code change or A/B/C scenario and produce a decision-ready test report."

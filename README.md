@@ -2,6 +2,11 @@
 
 AI Test Officer MVP for the hackathon direction `AI 测试官`.
 
+Competition target: build an Agent that completes the loop
+`understand change -> plan test strategy -> execute validation -> write a decision-ready report`,
+covering backend logic and, later, frontend experience. The detailed requirement
+breakdown lives in [docs/competition-requirements.md](docs/competition-requirements.md).
+
 The first version keeps the product thin and lets Codex do the heavy lifting:
 
 - read code / requirements / diffs,
@@ -27,6 +32,10 @@ uv sync --extra codex --group dev
 This project uses `uv` for Python version, virtual environment, dependency, and lockfile management.
 The `codex` extra installs the official Python package `openai-codex`, which controls the local Codex app-server.
 
+For company-internal runs, copy `.env.example` to `.env` and fill local tokens.
+The project-level Codex MCP template lives in `.codex/config.toml`; it references
+environment variables only and does not contain secrets.
+
 ## Usage
 
 Preview the prompt without calling Codex:
@@ -41,13 +50,112 @@ Generate a dry-run report:
 uv run ai-test-officer run --task "Review this repo and propose the first MVP test plan." --dry-run
 ```
 
+Check internal integrations without printing secrets:
+
+```powershell
+uv run ai-test-officer doctor
+```
+
+Simulate a WeCom bot notification without sending:
+
+```powershell
+uv run ai-test-officer notify --message "AI Test Officer notify smoke" --dry-run
+```
+
+Create and run the synthetic A/B/C competition demos:
+
+```powershell
+uv run ai-test-officer scenario create --scenario all --demo-root /tmp/ai-test-officer-scenarios
+uv run ai-test-officer scenario run --scenario A --demo-root /tmp/ai-test-officer-scenarios --dry-run
+uv run ai-test-officer scenario run --scenario A-fullstack --demo-root /tmp/ai-test-officer-scenarios --dry-run --visualize
+uv run ai-test-officer scenario run --scenario B --demo-root /tmp/ai-test-officer-scenarios --dry-run
+uv run ai-test-officer scenario run --scenario C --demo-root /tmp/ai-test-officer-scenarios --dry-run
+```
+
+For the full-chain browser demo, install the optional Playwright extra and Chromium:
+
+```powershell
+uv sync --extra codex --extra e2e --group dev
+uv run python -m playwright install chromium
+```
+
+The synthetic fullstack repo also works as a standalone demo because its browser
+test command uses `uv run --with playwright ...`.
+
+Send a report to a WeCom group bot after setting `WECOM_WEBHOOK_KEY` in local
+`.env` or the full `WECOM_WEBHOOK_URL`:
+
+```powershell
+uv run ai-test-officer notify --report reports/latest-report.md --message "场景A测试报告"
+```
+
+The scenario runner can also push the generated report summary:
+
+```powershell
+uv run ai-test-officer scenario run --scenario A --demo-root /tmp/ai-test-officer-scenarios --send
+```
+
+Generate the static visual report used for the competition demo:
+
+```powershell
+uv run ai-test-officer scenario create --scenario A-fullstack --demo-root /tmp/ai-test-officer-scenarios
+uv run ai-test-officer scenario run --scenario A-fullstack --demo-root /tmp/ai-test-officer-scenarios --visualize
+```
+
+Run scenario A against the last local commit:
+
+```powershell
+uv run ai-test-officer run --repo . --last-commit --task "场景A：分析刚提交的改动并跑针对性测试"
+```
+
+Run scenario A against a specific local git range:
+
+```powershell
+uv run ai-test-officer run --repo . --git-range "main..HEAD" --task "场景A：分析这个分支改动并跑针对性测试"
+```
+
 Run through the Codex Python SDK:
 
 ```powershell
 uv run ai-test-officer run --task "Analyze the latest changes, run safe checks, and produce a test report."
 ```
 
-Reports are written to `reports/latest-report.md` by default.
+Codex SDK runs use ephemeral threads by default, so they should not stay in the
+Codex sidebar. When debugging and intentionally keeping the thread, pass
+`--save-thread`.
+
+Reports are written to `reports/latest-report.md` by default. Each run also
+writes a JSON sidecar next to the report. Render it as a static HTML page with:
+
+```powershell
+uv run ai-test-officer visualize --report reports/latest-report.md
+```
+
+## Scenario A Demo
+
+Create synthetic demo repositories:
+
+```powershell
+uv run python scripts/create_scenario_demos.py
+```
+
+Or create only the scenario A repository with a baseline commit followed by a
+buggy checkout change:
+
+```powershell
+uv run python scripts/create_scenario_a_demo.py
+```
+
+The script prints the generated repository path and ready-to-run `scenario`
+commands:
+
+```powershell
+uv run ai-test-officer scenario run --scenario A --demo-root <demo-root> --dry-run
+```
+
+The demo uses Python `unittest` and intentionally breaks an existing boundary
+test so the report can explain the changed file, risk, failing validation, and
+recommended fix.
 
 ## Verification
 
@@ -69,19 +177,24 @@ uv sync --locked --extra codex --group dev
 - Structured Test Officer prompt.
 - Markdown report writer.
 - Local dry-run mode for prompt and report iteration.
+- Scenario A local git diff workflow for `--last-commit` and `--git-range`.
+- Scenario A/B/C synthetic competition demos through `scenario create/run`.
+- Scenario A-fullstack demo for backend logic, HTTP API, browser validation, and screenshot evidence.
+- JSON sidecar and static HTML visual report generation.
+- Internal integration doctor for TAPD, iWiki, Gongfeng/TGit, and Playwright MCP.
+- WeCom bot notification dry-run and optional webhook delivery.
+- Repo skill under `.agents/skills/ai-test-officer` for the reusable competition workflow.
 - Docs for competition requirements, architecture, and SDK notes.
 
-Later milestones should add Playwright evidence capture, GitHub PR diff input, scheduled checks, and bot/webhook delivery.
+Next milestones should add MR diff adapters, real TAPD requirement context,
+scheduled checks, and optional bot intake.
+
+For company-internal demo setup, including TAPD and TGit configuration, see
+[docs/internal-integrations.md](docs/internal-integrations.md).
 
 ## Frontend Plan
 
-The competition does not require a frontend, but it does encourage graphical or real-time presentation of the testing process and results. For the MVP, Markdown reports are enough to prove the agent loop. Before submission, add one lightweight presentation layer:
-
-- static HTML report generated from Markdown, or
-- a small Python web UI, such as FastAPI plus a simple template, or
-- a local dashboard that shows test timeline, changed files, risk level, failures, screenshots, and final verdict.
-
-Avoid building a full product console until the core testing workflow is reliable.
+The competition does not require a frontend, but it encourages graphical or real-time presentation of the testing process and results. This repo now uses a static HTML report as the lightweight presentation layer. It shows the test timeline, changed files, risk level, failures, screenshots, and final verdict without requiring a long-running web service.
 
 ## Data Strategy
 

@@ -6,8 +6,9 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .env
+.mcp.json
+.mcp.local.json
 dist/
 build/
 reports/*
 !reports/.gitkeep
-
