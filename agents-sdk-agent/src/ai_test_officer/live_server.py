@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import re
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -25,6 +26,16 @@ DEFAULT_FRONTEND_DIST = REPO_ROOT / "frontend" / "dist"
 _POLL_INTERVAL = 0.3
 _FINISH_GRACE = 3.0
 _MAX_IDLE = 120.0
+_ALLOWED_DEMO_SCENARIOS = {
+    "agent-loop",
+    "fullstack",
+    "promotion-chain",
+    "promotion-chain-pass",
+    "refund-guard",
+    "refund-guard-pass",
+    "release-guard",
+    "release-guard-pass",
+}
 
 
 class LiveServer(ThreadingHTTPServer):
@@ -32,7 +43,62 @@ class LiveServer(ThreadingHTTPServer):
         self.run_root = Path(run_root)
         self.dist_dir = Path(dist_dir) if dist_dir else DEFAULT_FRONTEND_DIST
         self.shutdown_evt = threading.Event()
+        self.active_demo_runs: set[str] = set()
+        self.demo_lock = threading.Lock()
+        self.demo_root = self.run_root.parent / "live-demos"
         super().__init__((host, port), _Handler)
+
+    def start_demo(self, scenario: str) -> str:
+        if scenario not in _ALLOWED_DEMO_SCENARIOS:
+            raise ValueError("unsupported synthetic demo scenario")
+        safe_scenario = re.sub(r"[^a-z0-9-]", "-", scenario)
+        run_id = f"live-{safe_scenario}-{int(time.time() * 1000)}"
+        with self.demo_lock:
+            if self.active_demo_runs:
+                raise RuntimeError("another synthetic demo is already running")
+            self.active_demo_runs.add(run_id)
+        thread = threading.Thread(target=self._execute_demo, args=(scenario, run_id), daemon=True)
+        thread.start()
+        return run_id
+
+    def _execute_demo(self, scenario: str, run_id: str) -> None:
+        try:
+            from .demo.fullstack import DemoRunConfig, run_agent_loop_demo, run_fullstack_demo
+            from .demo.investigation import run_investigation_demo
+            from .demo.release_guard import run_release_guard_demo
+            from .env import load_env_file
+
+            load_env_file(REPO_ROOT / ".env")
+            config = DemoRunConfig(
+                demo_root=self.demo_root,
+                planner_mode="agent-strict",
+                allow_temp_test_code=True,
+                runs_root=self.run_root,
+                run_id=run_id,
+            )
+            if scenario == "agent-loop":
+                run_agent_loop_demo(config)
+            elif scenario == "fullstack":
+                run_fullstack_demo(config)
+            elif scenario in {"release-guard", "release-guard-pass"}:
+                run_release_guard_demo(config, repaired=scenario.endswith("-pass"))
+            else:
+                run_investigation_demo(config, scenario)
+        except Exception as exc:  # keep the live UI informed instead of losing the background error
+            from .events import EventSink
+            from .redaction import redact_secrets
+
+            sink = EventSink(self.run_root / run_id / "events.jsonl")
+            sink.verdict(
+                "needs-follow-up",
+                "unknown",
+                "execution-error",
+                redact_secrets(f"Synthetic demo execution failed: {type(exc).__name__}: {exc}"),
+            )
+            sink.done()
+        finally:
+            with self.demo_lock:
+                self.active_demo_runs.discard(run_id)
 
     def serve_forever(self, poll_interval: float = 0.5) -> None:  # type: ignore[override]
         try:
@@ -64,7 +130,17 @@ class _Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         qs = parse_qs(parsed.query)
-        if path == "/api/events":
+        if path == "/api/capabilities":
+            self._send_json(
+                200,
+                {
+                    "can_execute": True,
+                    "mode": "local-live-server",
+                    "scenarios": sorted(_ALLOWED_DEMO_SCENARIOS),
+                    "busy": bool(self.server.active_demo_runs),
+                },
+            )
+        elif path == "/api/events":
             self._stream_events(qs)
         elif path == "/api/run.json":
             self._serve_run_file(qs, "run.json", "application/json")
@@ -76,6 +152,35 @@ class _Handler(BaseHTTPRequestHandler):
             self._serve_asset(path)
         else:
             self._serve_index()
+
+    def do_POST(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        if parsed.path != "/api/demo/start":
+            self.send_error(404, "not found")
+            return
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            self.send_error(400, "invalid content length")
+            return
+        if size <= 0 or size > 4096:
+            self.send_error(400, "invalid request body")
+            return
+        try:
+            body = json.loads(self.rfile.read(size))
+        except json.JSONDecodeError:
+            self.send_error(400, "invalid JSON")
+            return
+        scenario = str(body.get("scenario") or "") if isinstance(body, dict) else ""
+        try:
+            run_id = self.server.start_demo(scenario)
+        except ValueError as exc:
+            self._send_json(400, {"error": str(exc)})
+            return
+        except RuntimeError as exc:
+            self._send_json(409, {"error": str(exc)})
+            return
+        self._send_json(202, {"run_id": run_id, "events_url": f"/api/events?run_id={run_id}"})
 
     def log_message(self, *args) -> None:  # silence default stderr logging
         return
@@ -226,5 +331,14 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _send_json(self, status: int, payload: dict) -> None:
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(data)

@@ -276,6 +276,9 @@ certificate work are only needed for a formal business domain.
 ### 开发机实时直播
 
 ```bash
+# 推荐：启动任务工作台，在浏览器中选择一一对应的 TAPD/MR、生成计划并点击执行
+uv run ai-test-officer dashboard --runs-root runs/live-runs --host 127.0.0.1 --port 8789
+
 # 运行并同时打开实时仪表盘（默认 http://127.0.0.1:8789/?run_id=<id>）
 uv run ai-test-officer demo run \
   --scenario fullstack \
@@ -306,14 +309,15 @@ npm run typecheck  # 可选：类型检查
 
 `report export-fue` 会把 `frontend/dist` 一并打进 FUE 静态包的
 `public/dashboard/`，并附带本次运行的 `events.jsonl`、证据与日志。部署后无需后端
-即可回放：
+即可按原始事件顺序动态复盘：
 
 ```text
 https://<your-fue-domain>/dashboard/?mode=static
 ```
 
-仪表盘在该模式下读取同目录的 `events.jsonl` 完整还原过程时间线、失败定位与
-证据网格（详见导出包内的 `FUE_DEPLOY.md`）。
+仪表盘在该模式下逐步播放同目录的 `events.jsonl`，完整还原 Agent 阶段、工具调用、
+策略形成、失败定位与证据网格（详见导出包内的 `FUE_DEPLOY.md`）。线上静态包不持有
+模型密钥；真正的一键执行只在上述本地任务工作台中启用。
 
 Run a read-only MR/local range analysis:
 

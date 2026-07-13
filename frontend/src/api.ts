@@ -1,5 +1,35 @@
 import type { AppEvent } from "./types";
 
+export interface ExecutionCapability {
+  can_execute: boolean;
+  mode: string;
+  scenarios: string[];
+  busy: boolean;
+}
+
+export async function getExecutionCapability(): Promise<ExecutionCapability | null> {
+  try {
+    const response = await fetch("/api/capabilities", { cache: "no-store" });
+    if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) return null;
+    return (await response.json()) as ExecutionCapability;
+  } catch {
+    return null;
+  }
+}
+
+export async function startDemoExecution(scenario: string): Promise<string> {
+  const response = await fetch("/api/demo/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scenario }),
+  });
+  const payload = (await response.json()) as { run_id?: string; error?: string };
+  if (!response.ok || !payload.run_id) {
+    throw new Error(payload.error || "无法启动本地合成测试");
+  }
+  return payload.run_id;
+}
+
 /**
  * Detect the "static replay" mode used by the FUE export. In this mode the
  * dashboard is served as a plain static site with no backend, so it must read
@@ -62,19 +92,34 @@ async function replayStatic(
       return;
     }
     const text = await res.text();
+    const events: AppEvent[] = [];
     for (const line of text.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed) continue;
       try {
-        onEvent(JSON.parse(trimmed) as AppEvent);
+        events.push(JSON.parse(trimmed) as AppEvent);
       } catch {
         // Ignore malformed frames.
+      }
+    }
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    for (const event of events) {
+      onEvent(event);
+      if (!reduceMotion && event.type !== "done") {
+        await new Promise((resolve) => window.setTimeout(resolve, replayDelay(event)));
       }
     }
   } catch {
     // Network/file errors: nothing to replay.
   }
   onClose();
+}
+
+function replayDelay(event: AppEvent): number {
+  if (event.type === "phase") return 260;
+  if (event.type === "tool_call" || event.type === "command") return 420;
+  if (event.type === "evidence" || event.type === "verdict") return 520;
+  return 180;
 }
 
 /**

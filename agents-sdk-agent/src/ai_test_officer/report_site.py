@@ -203,7 +203,7 @@ def _fallback_dashboard_html() -> str:
 def _copy_sanitized_events(source: Path, target: Path, run_metadata: dict[str, Any]) -> None:
     if not source.exists() or not source.is_file():
         return
-    lines: list[str] = []
+    events: list[dict[str, Any]] = []
     for line in source.read_text(encoding="utf-8", errors="replace").splitlines():
         try:
             event = json.loads(line)
@@ -212,10 +212,20 @@ def _copy_sanitized_events(source: Path, target: Path, run_metadata: dict[str, A
         if not isinstance(event, dict):
             continue
         scrubbed = _scrub_event(event, run_metadata)
-        lines.append(json.dumps(scrubbed, ensure_ascii=False))
-    if lines:
+        if isinstance(scrubbed, dict):
+            events.append(scrubbed)
+    if events:
+        # Older runs emitted ``done`` before the final reporting-phase event.
+        # Static replay closes on ``done``, so always normalize it to the end.
+        done_events = [event for event in events if event.get("type") == "done"]
+        events = [event for event in events if event.get("type") != "done"] + done_events[-1:]
+        for seq, event in enumerate(events, start=1):
+            event["seq"] = seq
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        target.write_text(
+            "\n".join(json.dumps(event, ensure_ascii=False) for event in events) + "\n",
+            encoding="utf-8",
+        )
 
 
 def _scrub_event(value: Any, run_metadata: dict[str, Any]) -> Any:

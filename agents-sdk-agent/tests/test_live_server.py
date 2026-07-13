@@ -80,6 +80,27 @@ class LiveServerTests(unittest.TestCase):
         self.assertEqual(json.loads(resp.read())["verdict"], "fail")
         conn.close()
 
+    def test_capabilities_expose_local_synthetic_execution(self) -> None:
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        conn.request("GET", "/api/capabilities")
+        resp = conn.getresponse()
+        payload = json.loads(resp.read())
+        self.assertEqual(resp.status, 200)
+        self.assertTrue(payload["can_execute"])
+        self.assertEqual(payload["mode"], "local-live-server")
+        self.assertIn("release-guard", payload["scenarios"])
+        conn.close()
+
+    def test_start_demo_rejects_unknown_scenario(self) -> None:
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        body = json.dumps({"scenario": "remote-production"})
+        conn.request("POST", "/api/demo/start", body=body, headers={"Content-Type": "application/json"})
+        resp = conn.getresponse()
+        payload = json.loads(resp.read())
+        self.assertEqual(resp.status, 400)
+        self.assertIn("unsupported", payload["error"])
+        conn.close()
+
     def test_run_json_missing(self) -> None:
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
         conn.request("GET", "/api/run.json?run_id=does-not-exist")

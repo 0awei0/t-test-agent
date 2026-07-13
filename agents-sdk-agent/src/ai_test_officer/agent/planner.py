@@ -334,7 +334,7 @@ def run_agent_planner(
 
 @contextlib.contextmanager
 def _planner_timeout(seconds: int) -> Iterator[None]:
-    if not hasattr(signal, "SIGALRM"):
+    if not hasattr(signal, "SIGALRM") or threading.current_thread() is not threading.main_thread():
         yield
         return
     previous_handler = signal.getsignal(signal.SIGALRM)

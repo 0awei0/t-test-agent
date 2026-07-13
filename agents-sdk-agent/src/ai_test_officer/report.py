@@ -110,7 +110,12 @@ def _deterministic_recommendations(record: RunRecord) -> list[str]:
     ]
 
 
-def write_outputs(record: RunRecord, agent_summary: str | None = None) -> None:
+def write_outputs(
+    record: RunRecord,
+    agent_summary: str | None = None,
+    *,
+    finish_events: bool = True,
+) -> None:
     populate_decision_context(record)
     record.run_dir.mkdir(parents=True, exist_ok=True)
     markdown = render_markdown(record, agent_summary)
@@ -124,7 +129,8 @@ def write_outputs(record: RunRecord, agent_summary: str | None = None) -> None:
             failure_category=record.failure_category,
             summary=record.summary,
         )
-        record.events.done()
+        if finish_events:
+            record.events.done()
 
 
 def render_markdown(record: RunRecord, agent_summary: str | None = None) -> str:
@@ -588,7 +594,7 @@ def _render_structured_html(record: RunRecord, markdown: str) -> str:
   <div class="hero">
     <h1>AI 测试官报告</h1>
     <p>{html.escape(record.summary)}</p>
-    <a class="launcher-link" href="dashboard/?mode=static">查看真实执行结果回放 →</a>
+    <a class="launcher-link" href="dashboard/?mode=static">观看 Agent 动态执行复盘 →</a>
     <a class="launcher-link secondary" href="dashboard/">体验合成 TAPD / 工蜂任务</a>
     <div class="grid">
       <div class="metric"><b>结论</b><span class="badge {verdict_class}">{html.escape(record.verdict)}</span></div>

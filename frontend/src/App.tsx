@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { openStream, isStaticReplay, reportUrl } from "./api";
+import {
+  getExecutionCapability,
+  openStream,
+  isStaticReplay,
+  reportUrl,
+  startDemoExecution,
+} from "./api";
 import type {
   AppEvent,
   CommandEvent,
   EvidenceEvent,
   PhaseName,
+  ToolCallEvent,
   VerdictEvent,
 } from "./types";
 import { PhaseStepper } from "./components/PhaseStepper";
@@ -12,6 +19,8 @@ import { VerdictHero } from "./components/VerdictHero";
 import { CommandList } from "./components/CommandList";
 import { EvidenceGrid } from "./components/EvidenceGrid";
 import { FailureBanner } from "./components/FailureBanner";
+import { Timeline } from "./components/Timeline";
+import { StrategyPanel } from "./components/StrategyPanel";
 
 const PHASE_ORDER: PhaseName[] = [
   "checkout",
@@ -34,75 +43,37 @@ function useRunId(): string {
   return params.get("run_id") ?? "";
 }
 
-const SIMULATED_TAPD_CASES = [
-  {
-    id: "story-promotion",
-    tapd: "TAPD #114514 · 大促优惠与库存策略调整",
-  },
-  {
-    id: "story-pricing",
-    tapd: "TAPD #114515 · 合作方优惠上限变更",
-  },
-  {
-    id: "story-refund",
-    tapd: "TAPD #114516 · 退款角色与订单状态校验",
-  },
+const DEMO_TASKS = [
+  { id: "task-42", tapdId: "TAPD-114514", requirement: "大促订单需保持支付幂等与库存准确", acceptance: ["同一 request_id 只扣减一次库存", "重复请求返回同一订单"], iid: "!42", mrTitle: "移除 request_id 幂等保护", summary: "支付重试可能重复扣减库存", expected: "block", scenario: "promotion-chain", risk: "支付幂等 / 库存超卖", checks: [["单元测试", "OrderService.checkout", "重复请求不重复扣库存"], ["接口测试", "POST /orders", "相同 request_id 返回一致"], ["日志复核", "失败命令日志", "定位幂等分支缺失"]] },
+  { id: "task-43", tapdId: "TAPD-114515", requirement: "优惠上限调整后前后端契约必须一致", acceptance: ["合法优惠正常下单", "越界优惠被明确拒绝"], iid: "!43", mrTitle: "优惠上限调整与契约同步", summary: "策略、文案与边界测试同步更新", expected: "pass", scenario: "promotion-chain-pass", risk: "价格策略 / API 契约", checks: [["单元测试", "优惠边界", "上限内通过、越界拒绝"], ["接口测试", "下单 API", "错误码与契约一致"], ["回归验证", "订单主链", "修复后全部通过"]] },
+  { id: "task-45", tapdId: "TAPD-114516", requirement: "大促优惠不得突破 30% 发布红线", acceptance: ["31% 及以上优惠被拒绝", "页面展示与服务端策略一致"], iid: "!45", mrTitle: "优惠券 30% 边界被放宽", summary: "默认 45% 优惠可能直接形成资损", expected: "block", scenario: "release-guard", risk: "优惠资损 / 前后端漂移", checks: [["单元测试", "Coupon Policy", "30% 边界精确校验"], ["接口测试", "Checkout API", "越界优惠返回失败"], ["浏览器测试", "结算页", "保留失败截图证据"]] },
+  { id: "task-46", tapdId: "TAPD-114517", requirement: "修复大促订单安全护栏并完成发布回归", acceptance: ["优惠、库存、幂等保护恢复", "浏览器主路径验证通过"], iid: "!46", mrTitle: "大促订单安全护栏修复", summary: "恢复策略检查并补齐回归证据", expected: "pass", scenario: "release-guard-pass", risk: "发布回归 / 防复发", checks: [["单元测试", "订单安全护栏", "核心边界全部通过"], ["接口测试", "下单 API", "契约恢复"], ["浏览器测试", "结算页", "修复后页面回归"]] },
+  { id: "task-47", tapdId: "TAPD-114518", requirement: "退款操作必须校验角色与订单状态", acceptance: ["普通用户不能高权限退款", "已发货订单拒绝退款"], iid: "!47", mrTitle: "退款角色校验缺失", summary: "权限与状态机均可能被绕过", expected: "block", scenario: "refund-guard", risk: "越权退款 / 状态机", checks: [["权限测试", "refund role", "普通用户被拒绝"], ["状态机测试", "shipped order", "已发货不可退款"], ["异常路径", "退款接口", "保留失败归因"]] },
+  { id: "task-48", tapdId: "TAPD-114519", requirement: "补齐退款权限与状态机守卫", acceptance: ["角色检查恢复", "非法状态迁移被阻止"], iid: "!48", mrTitle: "退款状态机守卫补齐", summary: "权限与订单状态校验完成修复", expected: "pass", scenario: "refund-guard-pass", risk: "退款回归 / 权限边界", checks: [["权限测试", "refund role", "角色矩阵通过"], ["状态机测试", "order state", "非法迁移被拒绝"], ["回归验证", "退款主链", "合法退款仍可用"]] },
+  { id: "task-53", tapdId: "TAPD-114520", requirement: "调试能力不得向前端泄露敏感字段", acceptance: ["响应不包含令牌", "临时测试只写隔离目录"], iid: "!53", mrTitle: "调试令牌写入响应", summary: "敏感字段可能暴露到浏览器", expected: "block", scenario: "agent-loop", risk: "敏感信息泄露", checks: [["内容扫描", "HTTP response", "不存在 token 字段"], ["边界测试", "debug endpoint", "生产响应脱敏"], ["安全校验", "临时写入", "仅限隔离测试目录"]] },
+  { id: "task-55", tapdId: "TAPD-114521", requirement: "结算页异常路径必须阻止错误下单", acceptance: ["异常优惠不能提交", "失败状态给出明确反馈"], iid: "!55", mrTitle: "结算页异常路径失效", summary: "下单按钮在失败条件下仍可点击", expected: "block", scenario: "fullstack", risk: "页面主链 / 错误下单", checks: [["业务单测", "checkout service", "异常输入被拒绝"], ["接口测试", "checkout API", "失败响应正确"], ["浏览器测试", "结算页", "按钮状态与截图证据"]] },
 ] as const;
-
-const SIMULATED_MR_CASES = [
-  { id: "mr-42", iid: "!42", title: "移除 request_id 幂等保护", summary: "支付重试会重复扣库存", expected: "block", scenario: "promotion-chain" },
-  { id: "mr-43", iid: "!43", title: "优惠上限调整与契约同步", summary: "策略与边界测试保持一致", expected: "pass", scenario: "promotion-chain-pass" },
-  { id: "mr-44", iid: "!44", title: "库存预占重复扣减", summary: "相同订单重试导致库存归零", expected: "block", scenario: "promotion-chain" },
-  { id: "mr-45", iid: "!45", title: "优惠券 30% 边界回归", summary: "临界值校验被错误放宽", expected: "block", scenario: "release-guard" },
-  { id: "mr-46", iid: "!46", title: "大促优惠策略修复", summary: "合法券与越界券均已覆盖", expected: "pass", scenario: "release-guard-pass" },
-  { id: "mr-47", iid: "!47", title: "退款角色校验缺失", summary: "普通用户可触发高权限退款", expected: "block", scenario: "refund-guard" },
-  { id: "mr-48", iid: "!48", title: "退款状态机守卫补齐", summary: "已发货订单拒绝退款", expected: "pass", scenario: "refund-guard-pass" },
-  { id: "mr-49", iid: "!49", title: "已发货订单允许退款", summary: "状态迁移绕过发布约束", expected: "block", scenario: "refund-guard" },
-  { id: "mr-50", iid: "!50", title: "支付重试回归测试补全", summary: "幂等与库存断言均通过", expected: "pass", scenario: "promotion-chain-pass" },
-  { id: "mr-51", iid: "!51", title: "库存允许负数", summary: "并发预占后可售库存穿透", expected: "block", scenario: "release-guard" },
-  { id: "mr-52", iid: "!52", title: "运营文案与监控字段", summary: "无业务逻辑风险，回归通过", expected: "pass", scenario: "release-guard-pass" },
-  { id: "mr-53", iid: "!53", title: "调试令牌写入响应", summary: "敏感字段可能暴露到前端", expected: "block", scenario: "agent-loop" },
-  { id: "mr-54", iid: "!54", title: "订单 API 兼容性修复", summary: "旧请求参数仍可正常处理", expected: "pass", scenario: "promotion-chain-pass" },
-  { id: "mr-55", iid: "!55", title: "结算页浏览器回归", summary: "下单按钮在异常路径不可用", expected: "block", scenario: "fullstack" },
-  { id: "mr-56", iid: "!56", title: "发布前校验收敛", summary: "定向单测与页面验证均通过", expected: "pass", scenario: "release-guard-pass" },
-] as const;
-
-const MR_CASES_PER_PAGE = 5;
-
-const SCENARIO_CHECKS: Record<(typeof SIMULATED_MR_CASES)[number]["scenario"], string[]> = {
-  "promotion-chain": ["订单幂等单测", "库存与重试 API", "失败日志归因"],
-  "promotion-chain-pass": ["订单幂等单测", "库存与重试 API", "修复后回归确认"],
-  "release-guard": ["优惠边界单测", "下单 API", "浏览器截图证据"],
-  "release-guard-pass": ["优惠边界单测", "下单 API", "修复后浏览器回归"],
-  "refund-guard": ["退款角色校验", "订单状态机", "异常路径断言"],
-  "refund-guard-pass": ["退款角色校验", "订单状态机", "修复后回归确认"],
-  "agent-loop": ["敏感字段扫描", "临时测试隔离", "安全策略校验"],
-  "fullstack": ["后端业务单测", "HTTP API", "结算页浏览器验证"],
-};
 
 function DemoLauncher() {
-  const [tapdId, setTapdId] = useState<(typeof SIMULATED_TAPD_CASES)[number]["id"]>("story-promotion");
-  const [mrId, setMrId] = useState<(typeof SIMULATED_MR_CASES)[number]["id"]>("mr-42");
-  const [mrPage, setMrPage] = useState(0);
-  const [submitted, setSubmitted] = useState(false);
+  const [taskId, setTaskId] = useState<(typeof DEMO_TASKS)[number]["id"]>("task-45");
+  const [planReady, setPlanReady] = useState(false);
   const [copied, setCopied] = useState(false);
-  const selectedTapd = SIMULATED_TAPD_CASES.find((item) => item.id === tapdId) ?? SIMULATED_TAPD_CASES[0];
-  const selectedMr = SIMULATED_MR_CASES.find((item) => item.id === mrId) ?? SIMULATED_MR_CASES[0];
-  const totalMrPages = Math.ceil(SIMULATED_MR_CASES.length / MR_CASES_PER_PAGE);
-  const visibleMrCases = SIMULATED_MR_CASES.slice(mrPage * MR_CASES_PER_PAGE, (mrPage + 1) * MR_CASES_PER_PAGE);
-  const blockedMrCount = SIMULATED_MR_CASES.filter((item) => item.expected === "block").length;
-  const passedMrCount = SIMULATED_MR_CASES.length - blockedMrCount;
-  const liveRunId = `live-${selectedMr.id}`;
-  const plannerMode = selectedMr.expected === "pass" ? "agent" : "agent-strict";
-  const runCommand = `uv run ai-test-officer demo run --scenario ${selectedMr.scenario} --demo-root runs/live-demos --runs-root runs/live-runs --run-id ${liveRunId} --planner-mode ${plannerMode} --allow-temp-test-code --visualize --dashboard-port 8789 --env .env`;
-  const scenarioChecks = SCENARIO_CHECKS[selectedMr.scenario];
+  const [canExecute, setCanExecute] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState("");
+  const selectedTask = DEMO_TASKS.find((item) => item.id === taskId) ?? DEMO_TASKS[0];
+  const liveRunId = `live-${selectedTask.id}`;
+  const runCommand = `uv run ai-test-officer demo run --scenario ${selectedTask.scenario} --demo-root runs/live-demos --runs-root runs/live-runs --run-id ${liveRunId} --planner-mode agent-strict --allow-temp-test-code --visualize --dashboard-host 127.0.0.1 --dashboard-port 8789 --env .env`;
 
-  const selectMr = (nextMrId: (typeof SIMULATED_MR_CASES)[number]["id"]) => {
-    const index = SIMULATED_MR_CASES.findIndex((item) => item.id === nextMrId);
-    setMrId(nextMrId);
-    setMrPage(Math.floor(index / MR_CASES_PER_PAGE));
-    setSubmitted(false);
+  useEffect(() => {
+    void getExecutionCapability().then((capability) => setCanExecute(Boolean(capability?.can_execute)));
+  }, []);
+
+  const selectTask = (nextTaskId: (typeof DEMO_TASKS)[number]["id"]) => {
+    setTaskId(nextTaskId);
+    setPlanReady(false);
     setCopied(false);
+    setStartError("");
   };
 
   const copyRunCommand = async () => {
@@ -114,26 +85,34 @@ function DemoLauncher() {
     }
   };
 
+  const startExecution = async () => {
+    if (!canExecute) {
+      setStartError("当前是线上脱敏展示页，没有本地执行器。请复制命令在项目根目录启动，或打开本地 Live Server 后点击执行。");
+      return;
+    }
+    setStarting(true);
+    setStartError("");
+    try {
+      const runId = await startDemoExecution(selectedTask.scenario);
+      window.location.assign(`?run_id=${encodeURIComponent(runId)}`);
+    } catch (error) {
+      setStartError(error instanceof Error ? error.message : "启动失败");
+      setStarting(false);
+    }
+  };
+
   return (
     <main className="launcher-shell">
       <header className="launcher-brand"><span>Release Guard</span><small>AI 测试官 · 比赛演示入口</small></header>
-      <section className="launcher-hero">
-        <span className="eyebrow">SIMULATED WORKFLOW</span>
-        <h1>一句需求，完成发布前测试决策</h1>
-        <p>从模拟 TAPD 与工蜂 MR 案例库中选择任务，前端演示如何理解变更、规划验证并给出发布建议。</p>
+      <section className="launcher-hero compact">
+        <div><span className="eyebrow">SYNTHETIC TASK · REAL AGENT RUN</span><h1>需求与变更一一对应，生成计划后立即验证</h1><p>每张任务卡绑定一个 TAPD 需求和一个工蜂 MR；线上动态复盘真实脱敏事件，本地可一键启动 Agent。</p></div>
+        <a className="replay-entry" href="?mode=static">观看真实执行动态复盘 →</a>
       </section>
-      <section className="launcher-grid">
-        <form className="launcher-form" onSubmit={(event) => { event.preventDefault(); setSubmitted(true); }}>
-          <div className="form-heading"><h2>创建一次测试任务</h2><span>仅模拟数据</span></div>
-          <label>模拟 TAPD 需求<select value={tapdId} onChange={(event) => { setTapdId(event.target.value as typeof tapdId); setSubmitted(false); }}>{SIMULATED_TAPD_CASES.map((item) => <option key={item.id} value={item.id}>{item.tapd}</option>)}</select></label>
-          <div className="mr-picker"><div className="mr-picker-heading"><b>模拟工蜂 MR</b><span>{SIMULATED_MR_CASES.length} 条案例 · {passedMrCount} 通过 / {blockedMrCount} 阻断 · 第 {mrPage + 1}/{totalMrPages} 页</span></div><div className="mr-case-list">{visibleMrCases.map((item) => <button key={item.id} type="button" className={`mr-case ${item.expected} ${item.id === mrId ? "selected" : ""}`} onClick={() => selectMr(item.id)} aria-pressed={item.id === mrId}><span className="mr-case-top"><b>MR {item.iid}</b><em>{item.expected === "pass" ? "预期通过" : "预期阻断"}</em></span><strong>{item.title}</strong><small>{item.summary}</small></button>)}</div><div className="mr-pagination">{Array.from({ length: totalMrPages }, (_, index) => <button key={index} type="button" className={index === mrPage ? "active" : ""} onClick={() => { setMrPage(index); setSubmitted(false); }}>{index + 1}</button>)}</div></div>
-          <div className="selected-case"><b>已选案例</b><span>{selectedTapd.tapd} / MR {selectedMr.iid} · {selectedMr.title}</span></div>
-          <button type="submit">模拟生成测试计划</button>
-          <p className="form-note">选项均为合成数据；不会请求 TAPD、工蜂或业务仓库，也不会执行远程写操作。</p>
-        </form>
-        <aside className="launcher-aside"><h2>评委可见闭环</h2><ol><li>理解变更与风险范围</li><li>选择单测 / API / 浏览器验证</li><li>保留失败截图与命令证据</li><li>输出可执行的发布建议</li></ol><div className="safe-chip">安全边界：合成数据 · 隔离工作区 · 脱敏导出</div></aside>
+      <section className="task-workbench">
+        <div className="task-library"><div className="section-heading"><div><span>01 · 选择任务</span><h2>TAPD × 工蜂 MR</h2></div><em>一一对应 · 合成数据</em></div><div className="task-list">{DEMO_TASKS.map((item) => <button key={item.id} type="button" className={`task-card ${item.expected} ${item.id === taskId ? "selected" : ""}`} onClick={() => selectTask(item.id)} aria-pressed={item.id === taskId}><div className="task-card-head"><span>{item.tapdId}</span><span>MR {item.iid}</span><em>{item.expected === "pass" ? "修复验证" : "风险阻断"}</em></div><strong>{item.requirement}</strong><p>{item.mrTitle}</p><small>{item.summary}</small></button>)}</div></div>
+        <div className="plan-builder"><div className="section-heading"><div><span>02 · Agent 规划</span><h2>测试计划</h2></div><em>{planReady ? "计划已生成" : "等待生成"}</em></div>{planReady ? <div className="test-plan"><div className="pair-summary"><div><span>需求</span><b>{selectedTask.tapdId}</b><p>{selectedTask.requirement}</p></div><div><span>变更</span><b>MR {selectedTask.iid}</b><p>{selectedTask.mrTitle}</p></div></div><div className="plan-risk"><span>核心风险</span><strong>{selectedTask.risk}</strong></div><div className="acceptance"><b>验收标准</b>{selectedTask.acceptance.map((item) => <span key={item}>✓ {item}</span>)}</div><table className="plan-table"><thead><tr><th>验证层</th><th>验证目标</th><th>预期证据</th></tr></thead><tbody>{selectedTask.checks.map(([kind, target, goal]) => <tr key={kind}><td>{kind}</td><td>{target}</td><td>{goal}</td></tr>)}</tbody></table><div className="plan-actions"><button type="button" className="execute-button" onClick={() => { void startExecution(); }} disabled={starting}>{starting ? "正在启动 Agent…" : canExecute ? "开始实际执行" : "在本地启动实际执行"}</button><button type="button" className="copy-command" onClick={() => { void copyRunCommand(); }}>{copied ? "命令已复制" : "复制本地命令"}</button></div>{startError && <p className="execution-note error">{startError}</p>}<p className="execution-note">执行后自动进入实时驾驶舱，展示 Agent 阶段、工具调用、测试命令、失败日志、截图与最终结论。</p></div> : <div className="plan-empty"><span>先确认任务映射</span><h3>{selectedTask.tapdId} ↔ MR {selectedTask.iid}</h3><p>Agent 将把需求验收点、代码风险和验证证据整理为可执行计划。</p><button type="button" onClick={() => setPlanReady(true)}>生成测试计划</button></div>}</div>
       </section>
-      {submitted && <section className="simulation-result" aria-live="polite"><span>已建立真实运行映射</span><h2>{selectedMr.expected === "pass" ? "修复验证：预期通过" : "回归验证：预期阻断"}</h2><p>已选择：{selectedTapd.tapd} / MR {selectedMr.iid} · {selectedMr.title}。此卡片不会跳转到不匹配的静态回放；下方命令会生成该 MR 对应的真实日志、截图和报告。</p><div className="check-strip"><b>本次验证</b>{scenarioChecks.map((check) => <span key={check}>{check}</span>)}</div><div className="command-box"><code className="run-command">{runCommand}</code><button type="button" className="copy-command" onClick={() => { void copyRunCommand(); }}>{copied ? "已复制" : "复制命令"}</button></div><ol className="live-steps"><li>在项目根目录执行命令；浏览器打开 <code>http://127.0.0.1:8789/?run_id={liveRunId}</code> 查看实时过程。</li><li>完成后查看 <code>runs/live-runs/{liveRunId}/report.html</code>、命令日志和截图证据。</li><li>想先查看完整示例，可打开 <a href="../">默认 Release Guard 证据报告</a>。</li></ol></section>}
+      <section className="workflow-strip"><span><b>1</b>理解需求与 diff</span><span><b>2</b>形成风险策略</span><span><b>3</b>执行单测 / API / 浏览器</span><span><b>4</b>读取日志与证据</span><span><b>5</b>给出发布决策</span></section>
     </main>
   );
 }
@@ -144,6 +123,8 @@ export default function App() {
   const [started, setStarted] = useState<Set<PhaseName>>(new Set());
   const [finished, setFinished] = useState<Set<PhaseName>>(new Set());
   const [commands, setCommands] = useState<Record<string, CommandEvent>>({});
+  const [toolCalls, setToolCalls] = useState<Record<string, ToolCallEvent>>({});
+  const [plannerSteps, setPlannerSteps] = useState<string[]>([]);
   const [task, setTask] = useState("");
   const [changedFiles, setChangedFiles] = useState<{ status: string; path: string }[]>([]);
   const [evidence, setEvidence] = useState<EvidenceEvent[]>([]);
@@ -174,6 +155,12 @@ export default function App() {
           case "command":
             setCommands((prev) => ({ ...prev, [d.id as string]: d as unknown as CommandEvent }));
             break;
+          case "tool_call":
+            setToolCalls((prev) => ({ ...prev, [d.id as string]: d as unknown as ToolCallEvent }));
+            break;
+          case "planner":
+            setPlannerSteps((prev) => [...prev, String(d.step ?? "")]);
+            break;
           case "evidence":
             setEvidence((prev) =>
               prev.some((e) => e.path === (d.path as string))
@@ -197,6 +184,7 @@ export default function App() {
   }, [runId, staticMode]);
 
   const commandList = useMemo(() => Object.values(commands), [commands]);
+  const toolCallList = useMemo(() => Object.values(toolCalls), [toolCalls]);
   const failures = useMemo(
     () => commandList.filter((c) => c.status === "fail" || c.status === "blocked"),
     [commandList]
@@ -223,17 +211,17 @@ export default function App() {
           <span className="sub">AI 测试官 · 发布决策驾驶舱</span>
         </div>
         <div className="runmeta">
-          <span className="runid">{staticMode ? "真实执行结果回放" : runId}</span>
+          <span className="runid">{staticMode ? "真实执行动态复盘" : runId}</span>
           <span className={`conn ${connected ? "on" : ""}`}>
-            {connected ? (staticMode ? "已脱敏" : done ? "已结束" : "直播中") : "连接中…"}
+            {connected ? (staticMode ? (done ? "复盘完成" : "动态播放中") : done ? "已结束" : "直播中") : "连接中…"}
           </span>
         </div>
       </header>
 
       {staticMode && (
         <section className="replay-notice">
-          <b>真实执行结果回放</b>
-          <span>以下阶段、命令、失败信号和证据来自一次已完成的合成测试运行；当前静态页面不会连接真实 TAPD、工蜂或执行测试。</span>
+          <b>真实执行动态复盘</b>
+          <span>系统正按真实事件顺序逐步播放 Agent 的规划、工具调用、命令、失败日志和证据；数据已脱敏，线上页面不持有模型密钥。</span>
         </section>
       )}
 
@@ -263,6 +251,17 @@ export default function App() {
       />
 
       <VerdictHero verdict={verdict} running={running} failures={failures.length} commands={commandList.length} changedFiles={changedFiles.length} evidence={evidence.length} />
+
+      <section className="grid2 execution-grid">
+        <div className="panel">
+          <h2>Agent 工具调用 {toolCallList.length > 0 && <span className="count">{toolCallList.length}</span>}</h2>
+          <Timeline calls={toolCallList} />
+        </div>
+        <div className="panel">
+          <h2>策略形成过程 {plannerSteps.length > 0 && <span className="count">{plannerSteps.length}</span>}</h2>
+          <StrategyPanel steps={plannerSteps} />
+        </div>
+      </section>
 
       {failures.length > 0 && (
         <div ref={failureRef}>

@@ -97,6 +97,60 @@ body {
 .live-steps { margin: 0; padding-left: 20px; color: var(--muted); }
 .live-steps li { margin: 7px 0; }
 
+/* Synthetic task workbench */
+.launcher-shell { max-width: 1180px; }
+.launcher-hero.compact { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; padding: 34px 38px; }
+.launcher-hero.compact h1 { max-width: 760px; font-size: clamp(28px, 4vw, 44px); line-height: 1.12; }
+.launcher-hero.compact p { margin-bottom: 0; }
+.replay-entry { flex: 0 0 auto; padding: 11px 15px; border: 1px solid #ffffff4d; border-radius: 10px; color: #fff; background: #ffffff12; text-decoration: none; font-weight: 800; }
+.replay-entry:hover, .replay-entry:focus-visible { background: #ffffff22; outline: 2px solid #fff; }
+.task-workbench { display: grid; grid-template-columns: .92fr 1.08fr; gap: 18px; margin-top: 18px; align-items: start; }
+.task-library, .plan-builder { min-width: 0; padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: #fff; box-shadow: 0 12px 30px #172a540d; }
+.plan-builder { position: sticky; top: 16px; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+.section-heading span { color: var(--active); font-size: 11px; font-weight: 850; letter-spacing: .1em; }
+.section-heading h2 { margin: 2px 0 0; font-size: 21px; }
+.section-heading em { padding: 4px 9px; border-radius: 999px; background: #eef4ff; color: var(--active); font-size: 11px; font-style: normal; font-weight: 800; white-space: nowrap; }
+.task-list { display: grid; gap: 9px; max-height: 660px; overflow: auto; padding: 2px 4px 2px 2px; }
+.task-card { width: 100%; padding: 14px; border: 1px solid #dce4f1; border-radius: 12px; background: #fff; color: var(--ink); text-align: left; cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+.task-card:hover { border-color: #9db6ef; transform: translateY(-1px); box-shadow: 0 8px 18px #23447a12; }
+.task-card.selected { border-color: var(--active); background: linear-gradient(110deg, #eef4ff, #fbfdff); box-shadow: 0 0 0 2px #cfddff; }
+.task-card-head { display: flex; align-items: center; gap: 7px; margin-bottom: 9px; color: #50627e; font: 11px ui-monospace, monospace; }
+.task-card-head span { padding: 3px 6px; border-radius: 5px; background: #eef2f8; }
+.task-card-head em { margin-left: auto; padding: 3px 7px; border-radius: 999px; font: 800 11px -apple-system, sans-serif; font-style: normal; }
+.task-card.pass .task-card-head em { color: var(--ok); background: var(--ok-bg); }
+.task-card.block .task-card-head em { color: var(--fail); background: var(--fail-bg); }
+.task-card strong { display: block; font-size: 14px; line-height: 1.45; }
+.task-card p { margin: 7px 0 2px; color: #283a58; font-size: 13px; font-weight: 750; }
+.task-card small { color: var(--muted); font-size: 12px; }
+.plan-empty { min-height: 420px; display: grid; place-content: center; justify-items: center; padding: 38px; border: 1px dashed #b9c9e4; border-radius: 14px; background: linear-gradient(145deg, #f8fbff, #f1f5fc); text-align: center; }
+.plan-empty > span { color: var(--active); font-size: 12px; font-weight: 800; }
+.plan-empty h3 { margin: 8px 0; font-size: 22px; }
+.plan-empty p { max-width: 380px; margin: 0 0 22px; color: var(--muted); }
+.plan-empty button, .execute-button { border: 0; border-radius: 10px; padding: 12px 18px; background: var(--brand); color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
+.pair-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pair-summary > div { padding: 13px; border: 1px solid #dce5f2; border-radius: 11px; background: #f8faff; }
+.pair-summary span, .plan-risk span { display: block; color: var(--muted); font-size: 11px; font-weight: 800; }
+.pair-summary b { display: block; margin: 3px 0; color: var(--active); font: 750 13px ui-monospace, monospace; }
+.pair-summary p { margin: 0; font-size: 13px; line-height: 1.45; }
+.plan-risk { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; padding: 10px 12px; border-left: 4px solid #f59e0b; border-radius: 8px; background: #fff7e5; }
+.plan-risk strong { color: #7a4600; font-size: 13px; }
+.acceptance { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 12px 0; }
+.acceptance b { margin-right: 2px; font-size: 12px; }
+.acceptance span { padding: 4px 8px; border-radius: 999px; color: var(--ok); background: var(--ok-bg); font-size: 11px; font-weight: 700; }
+.plan-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
+.plan-table th, .plan-table td { padding: 10px; border: 1px solid #dde5f0; text-align: left; vertical-align: top; }
+.plan-table th { color: #425574; background: #f1f5fb; }
+.plan-table td:first-child { color: var(--active); font-weight: 800; white-space: nowrap; }
+.plan-actions { display: grid; grid-template-columns: 1fr auto; gap: 9px; margin-top: 16px; }
+.execute-button:disabled { cursor: wait; opacity: .65; }
+.execution-note { margin: 10px 0 0; color: var(--muted); font-size: 11px; }
+.execution-note.error { padding: 9px 10px; border-radius: 8px; color: #9b241e; background: var(--fail-bg); font-size: 12px; }
+.workflow-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 18px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.workflow-strip span { display: flex; align-items: center; gap: 7px; color: #40516d; font-size: 12px; }
+.workflow-strip b { width: 23px; height: 23px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; color: #fff; background: var(--active); }
+.execution-grid .panel { margin-bottom: 14px; }
+
 .empty {
   margin-top: 80px;
   text-align: center;
@@ -644,6 +698,13 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
   .launcher-grid { grid-template-columns: 1fr; }
+  .launcher-hero.compact { align-items: flex-start; flex-direction: column; padding: 28px 24px; }
+  .task-workbench { grid-template-columns: 1fr; }
+  .plan-builder { position: static; }
+  .task-list { max-height: 480px; }
+  .pair-summary, .plan-actions { grid-template-columns: 1fr; }
+  .workflow-strip { grid-template-columns: 1fr 1fr; }
+  .workflow-strip span:last-child { grid-column: 1 / -1; }
   .mr-case-list { grid-template-columns: 1fr; }
   .command-box { grid-template-columns: 1fr; }
   .copy-command { min-height: 38px; }

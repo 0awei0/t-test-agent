@@ -12,6 +12,16 @@ from test_runner import _create_buggy_repo
 
 
 class CliTests(unittest.TestCase):
+    def test_dashboard_command_starts_task_workbench(self) -> None:
+        server = Mock()
+        with (
+            patch("ai_test_officer.cli._start_task_dashboard", return_value=(server, "http://127.0.0.1:8789/")) as start,
+            patch("ai_test_officer.cli._hold_dashboard") as hold,
+        ):
+            main(["dashboard", "--runs-root", "runs/browser", "--host", "127.0.0.1", "--port", "8790"])
+        start.assert_called_once_with("runs/browser", "127.0.0.1", 8790)
+        hold.assert_called_once_with(server)
+
     def test_run_command_writes_expected_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

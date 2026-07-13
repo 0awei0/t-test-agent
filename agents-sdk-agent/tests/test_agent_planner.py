@@ -1,18 +1,34 @@
 import os
 import sys
 import tempfile
+import threading
 import types
 import unittest
 from pathlib import Path
 from typing import get_origin
 from unittest.mock import patch
 
-from ai_test_officer.agent.planner import _LiveRunHooks, run_agent_planner
+from ai_test_officer.agent.planner import _LiveRunHooks, _planner_timeout, run_agent_planner
 from ai_test_officer.models import ChangedFile, CommandResult, RunRecord
 from ai_test_officer.tools import AgentRunTools, LocalTestTools
 
 
 class AgentPlannerTests(unittest.TestCase):
+    def test_planner_timeout_is_safe_in_background_thread(self) -> None:
+        errors: list[Exception] = []
+
+        def run() -> None:
+            try:
+                with _planner_timeout(1):
+                    pass
+            except Exception as exc:  # pragma: no cover - assertion captures regressions
+                errors.append(exc)
+
+        thread = threading.Thread(target=run)
+        thread.start()
+        thread.join()
+        self.assertEqual(errors, [])
+
     def test_live_hooks_use_agents_sdk_base_type(self) -> None:
         from agents import RunHooks
 

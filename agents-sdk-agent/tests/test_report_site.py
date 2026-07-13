@@ -184,12 +184,21 @@ class ReportSiteTests(unittest.TestCase):
             (run_dir / "report.md").write_text("# Report\n", encoding="utf-8")
             (run_dir / "report.html").write_text("<html>ok</html>", encoding="utf-8")
             (run_dir / "events.jsonl").write_text(
-                json.dumps(
-                    {
-                        "seq": 1,
-                        "type": "tool_call",
-                        "data": {"output": f"OPENAI_API_KEY=top-secret {root}"},
-                    }
+                "\n".join(
+                    json.dumps(event)
+                    for event in [
+                        {
+                            "seq": 1,
+                            "type": "tool_call",
+                            "data": {"output": f"OPENAI_API_KEY=top-secret {root}"},
+                        },
+                        {"seq": 2, "type": "done", "data": {}},
+                        {
+                            "seq": 3,
+                            "type": "phase",
+                            "data": {"phase": "reporting", "status": "done"},
+                        },
+                    ]
                 )
                 + "\n",
                 encoding="utf-8",
@@ -208,6 +217,9 @@ class ReportSiteTests(unittest.TestCase):
             events = (exported.public_dir / "dashboard" / "events.jsonl").read_text(encoding="utf-8")
             self.assertNotIn("top-secret", events)
             self.assertNotIn(str(root), events)
+            exported_events = [json.loads(line) for line in events.splitlines()]
+            self.assertEqual(exported_events[-1]["type"], "done")
+            self.assertEqual([event["seq"] for event in exported_events], [1, 2, 3])
             self.assertFalse((exported.public_dir / "dashboard" / "logs").exists())
 
 

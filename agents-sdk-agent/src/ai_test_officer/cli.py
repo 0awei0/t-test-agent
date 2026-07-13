@@ -83,8 +83,16 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Start the live execution dashboard and stream this run in real time.",
     )
-    run.add_argument("--dashboard-host", default="0.0.0.0", help="Host for the live dashboard server.")
+    run.add_argument("--dashboard-host", default="127.0.0.1", help="Host for the live dashboard server.")
     run.add_argument("--dashboard-port", type=int, default=8789, help="Port for the live dashboard server.")
+
+    dashboard = subparsers.add_parser(
+        "dashboard",
+        help="Start the local task workbench and allow synthetic demos to run from the browser.",
+    )
+    dashboard.add_argument("--runs-root", default="runs/live-runs", help="Ignored root for browser-started runs.")
+    dashboard.add_argument("--host", default="127.0.0.1", help="Local dashboard bind host.")
+    dashboard.add_argument("--port", type=int, default=8789, help="Local dashboard port.")
 
     smoke = subparsers.add_parser("smoke", help="Run local smoke checks.")
     smoke_subparsers = smoke.add_subparsers(dest="smoke_command", required=True)
@@ -175,7 +183,7 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Start the live execution dashboard and stream this run in real time.",
     )
-    demo_run.add_argument("--dashboard-host", default="0.0.0.0", help="Host for the live dashboard server.")
+    demo_run.add_argument("--dashboard-host", default="127.0.0.1", help="Host for the live dashboard server.")
     demo_run.add_argument("--dashboard-port", type=int, default=8789, help="Port for the live dashboard server.")
 
     demo_showcase = demo_subparsers.add_parser(
@@ -275,6 +283,9 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "run":
         _validate_run_args(parser, args)
         _run_from_args(args)
+    elif args.command == "dashboard":
+        server, _ = _start_task_dashboard(args.runs_root, args.host, args.port)
+        _hold_dashboard(server)
     elif args.command == "smoke" and args.smoke_command == "tools":
         _smoke_tools_from_args(args)
     elif args.command == "smoke" and args.smoke_command == "mcp":
@@ -666,6 +677,16 @@ def _start_live_dashboard(run_id: str, runs_root: str, host: str, port: int):
     url = f"http://127.0.0.1:{port}/?run_id={urllib.parse.quote(run_id)}"
     print(f"Live dashboard: {url}")
     print("(Served on {host}:{port}; press Ctrl-C to stop.)".format(host=host, port=port))
+    return server, url
+
+
+def _start_task_dashboard(runs_root: str, host: str, port: int):
+    from .live_server import serve_live
+
+    server = serve_live(run_id="", host=host, port=port, run_root=Path(runs_root))
+    url = f"http://127.0.0.1:{port}/"
+    print(f"AI Test Officer task workbench: {url}")
+    print("Select one synthetic TAPD/MR task, generate its plan, then click Start execution.")
     return server, url
 
 

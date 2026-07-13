@@ -154,8 +154,9 @@ def run_test_officer(config: RunConfig) -> RunRecord:
     record.events.phase(RunPhase.REPORTING, "start")
     record.memory_summary = build_run_memory(record, mode=config.memory_mode)
     agent_summary = summarize_with_agents_sdk(record) if _agent_summary_enabled() else None
-    write_outputs(record, agent_summary=agent_summary)
+    write_outputs(record, agent_summary=agent_summary, finish_events=False)
     record.events.phase(RunPhase.REPORTING, "done")
+    record.events.done()
     return record
 
 
