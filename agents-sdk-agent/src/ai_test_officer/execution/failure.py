@@ -10,8 +10,21 @@ NO_TEST_SELECTED = "no-test-selected"
 PASSED = "passed"
 
 
+def effective_commands(commands: list[CommandResult]) -> list[CommandResult]:
+    """Return the latest result for each command while preserving command order.
+
+    Agent runs may repair a generated test and rerun the same command. The
+    earlier failure remains useful timeline evidence, but the latest rerun is
+    the effective release-gate result.
+    """
+    latest: dict[str, CommandResult] = {}
+    for command in commands:
+        latest[command.command] = command
+    return list(latest.values())
+
+
 def classify_record_failures(record: RunRecord) -> RunRecord:
-    failures = [command for command in record.commands if command.returncode != 0]
+    failures = [command for command in effective_commands(record.commands) if command.returncode != 0]
     if not record.commands:
         record.failure_category = NO_TEST_SELECTED
         record.blocked_reason = "No safe targeted test command was selected."

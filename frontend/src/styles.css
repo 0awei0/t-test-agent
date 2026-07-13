@@ -123,6 +123,7 @@ body {
 .task-card strong { display: block; font-size: 14px; line-height: 1.45; }
 .task-card p { margin: 7px 0 2px; color: #283a58; font-size: 13px; font-weight: 750; }
 .task-card small { color: var(--muted); font-size: 12px; }
+.replay-metrics { display: block; width: max-content; max-width: 100%; margin-top: 9px; padding: 3px 7px; border-radius: 6px; color: #2854b8; background: #e9f0ff; font-size: 10px; font-weight: 800; }
 .plan-empty { min-height: 420px; display: grid; place-content: center; justify-items: center; padding: 38px; border: 1px dashed #b9c9e4; border-radius: 14px; background: linear-gradient(145deg, #f8fbff, #f1f5fc); text-align: center; }
 .plan-empty > span { color: var(--active); font-size: 12px; font-weight: 800; }
 .plan-empty h3 { margin: 8px 0; font-size: 22px; }
@@ -143,6 +144,12 @@ body {
 .plan-table th { color: #425574; background: #f1f5fb; }
 .plan-table td:first-child { color: var(--active); font-weight: 800; white-space: nowrap; }
 .plan-actions { display: grid; grid-template-columns: 1fr auto; gap: 9px; margin-top: 16px; }
+.plan-actions.primary-replay { align-items: stretch; }
+.replay-button { display: grid; place-items: center; text-align: center; text-decoration: none; }
+.replay-button.unavailable { cursor: not-allowed; opacity: .55; }
+.replay-summary { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; padding: 11px 12px; border: 1px solid #bdd0f7; border-radius: 10px; background: #f2f6ff; }
+.replay-summary strong { width: 100%; color: #1f4bb3; font-size: 12px; }
+.replay-summary span { padding: 3px 7px; border-radius: 999px; color: #415575; background: #fff; font-size: 10px; font-weight: 750; }
 .execute-button:disabled { cursor: wait; opacity: .65; }
 .execution-note { margin: 10px 0 0; color: var(--muted); font-size: 11px; }
 .execution-note.error { padding: 9px 10px; border-radius: 8px; color: #9b241e; background: var(--fail-bg); font-size: 12px; }
@@ -150,6 +157,16 @@ body {
 .workflow-strip span { display: flex; align-items: center; gap: 7px; color: #40516d; font-size: 12px; }
 .workflow-strip b { width: 23px; height: 23px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; color: #fff; background: var(--active); }
 .execution-grid .panel { margin-bottom: 14px; }
+.backlink { color: var(--active); font-size: 12px; font-weight: 800; text-decoration: none; }
+.backlink:hover { text-decoration: underline; }
+.capability-grid { margin-bottom: 14px; }
+.capability-panel { min-height: 158px; }
+.capability-panel > strong { display: block; color: var(--active); font-size: 36px; line-height: 1; }
+.capability-panel > p { margin: 12px 0 0; color: var(--muted); font-size: 12px; }
+.memory-panel { background: linear-gradient(135deg, #f4f7ff, #fff); }
+.isolation-panel { background: linear-gradient(135deg, #f0fbf5, #fff); }
+.guardrails { display: flex; flex-wrap: wrap; gap: 8px; }
+.guardrails span { padding: 7px 9px; border-radius: 8px; color: var(--ok); background: var(--ok-bg); font-size: 11px; font-weight: 800; }
 
 .empty {
   margin-top: 80px;

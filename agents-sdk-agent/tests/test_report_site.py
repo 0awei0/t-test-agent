@@ -5,7 +5,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from ai_test_officer.models import ChangedFile, RunRecord
-from ai_test_officer.report_site import export_fue_static_project, publish_record, publish_report_path
+from ai_test_officer.report_site import (
+    export_fue_static_project,
+    export_replay_catalog,
+    publish_record,
+    publish_report_path,
+    write_local_replay_catalog,
+)
 
 
 class ReportSiteTests(unittest.TestCase):
@@ -221,6 +227,42 @@ class ReportSiteTests(unittest.TestCase):
             self.assertEqual(exported_events[-1]["type"], "done")
             self.assertEqual([event["seq"] for event in exported_events], [1, 2, 3])
             self.assertFalse((exported.public_dir / "dashboard" / "logs").exists())
+
+    def test_exports_multiple_sanitized_replays_and_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_dir = root / "runs" / "task-45"
+            evidence = run_dir / "evidence" / "shot.png"
+            evidence.parent.mkdir(parents=True)
+            evidence.write_bytes(b"png")
+            (run_dir / "report.html").write_text("<html>report</html>", encoding="utf-8")
+            (run_dir / "events.jsonl").write_text(
+                json.dumps({"seq": 1, "type": "done", "data": {}}) + "\n",
+                encoding="utf-8",
+            )
+            (run_dir / "run.json").write_text(
+                json.dumps(
+                    {
+                        "run_id": "task-45",
+                        "verdict": "fail",
+                        "risk": "high",
+                        "run_dir": str(run_dir),
+                        "memory_summary": {"compression_ratio": 0.4},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            replay_runs = {"task-45": ("release-guard", run_dir)}
+
+            local = write_local_replay_catalog(root / "runs", replay_runs, default_task_id="task-45")
+            manifest = export_replay_catalog(replay_runs, root / "public", default_task_id="task-45")
+
+            self.assertEqual(json.loads(local.read_text())["default_task_id"], "task-45")
+            exported = json.loads(manifest.read_text())
+            self.assertEqual(exported["items"][0]["verdict"], "fail")
+            self.assertEqual(exported["items"][0]["compression_ratio"], 0.4)
+            self.assertTrue((root / "public" / "replays" / "task-45" / "events.jsonl").exists())
+            self.assertTrue((root / "public" / "replays" / "task-45" / "evidence" / "shot.png").exists())
 
 
 if __name__ == "__main__":

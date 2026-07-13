@@ -100,6 +100,33 @@ class EventSink:
     def evidence(self, path: str, kind: str, caption: str = "") -> None:
         self.emit("evidence", path=path, kind=kind, caption=caption)
 
+    def memory(
+        self,
+        mode: str,
+        source_chars: int,
+        summary_chars: int,
+        compression_ratio: float,
+        artifact_count: int,
+    ) -> None:
+        self.emit(
+            "memory",
+            mode=mode,
+            source_chars=source_chars,
+            summary_chars=summary_chars,
+            compression_ratio=compression_ratio,
+            artifact_count=artifact_count,
+        )
+
+    def isolation(self) -> None:
+        self.emit(
+            "isolation",
+            workspace="isolated-copy",
+            source_repo="read-only",
+            command_policy="test-command-whitelist",
+            temp_write_scope="tests-and-evidence-only",
+            remote_mutation="disabled",
+        )
+
     def verdict(
         self,
         verdict: str,

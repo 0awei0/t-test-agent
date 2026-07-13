@@ -126,8 +126,13 @@ def _raw_context(record: RunRecord) -> str:
         "Commands:",
         "\n".join(_command_summary(item.command, item.returncode, item.stdout, item.stderr) for item in record.commands),
     ]
-    if record.diff_index_path and record.diff_index_path.exists():
-        parts.extend(["Diff index:", record.diff_index_path.read_text(encoding="utf-8", errors="replace")])
+    for artifact in _artifact_paths(record):
+        parts.extend(
+            [
+                f"Artifact: {artifact.name}",
+                artifact.read_text(encoding="utf-8", errors="replace"),
+            ]
+        )
     return redact_secrets("\n\n".join(parts))
 
 

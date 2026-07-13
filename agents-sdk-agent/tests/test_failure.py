@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from ai_test_officer.execution.failure import classify_command_failure, classify_record_failures
+from ai_test_officer.execution.failure import classify_command_failure, classify_record_failures, effective_commands
 from ai_test_officer.models import CommandResult, RunRecord
 
 
@@ -61,6 +61,17 @@ class FailureClassificationTests(unittest.TestCase):
         self.assertEqual(record.verdict, "blocked")
         self.assertEqual(record.failure_category, "dependency-missing")
         self.assertIn("does not prove", record.summary)
+
+    def test_latest_rerun_supersedes_an_earlier_failure(self) -> None:
+        commands = [
+            CommandResult("python -m unittest tests.test_generated -v", 1, "", "AssertionError", Path("1.log")),
+            CommandResult("python -m unittest tests.test_generated -v", 0, "", "OK", Path("2.log")),
+        ]
+
+        effective = effective_commands(commands)
+
+        self.assertEqual(len(effective), 1)
+        self.assertEqual(effective[0].returncode, 0)
 
 
 if __name__ == "__main__":

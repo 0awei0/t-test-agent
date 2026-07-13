@@ -43,6 +43,8 @@ def run_release_guard_demo(config: DemoRunConfig, *, repaired: bool = False) -> 
     if repaired:
         task = (
             "修复验证：分析大促订单安全护栏恢复的变更，自主执行单测、接口和浏览器验证，"
+            "再生成并运行 tests/test_agent_generated_release_guard.py，只补充验证 31% 优惠被拒绝、"
+            "同一合法 request_id 重试不重复扣库存；任何命令失败后立即读取对应日志。"
             "确认优惠、库存与支付幂等保护均已恢复，并给出是否允许发布的明确建议。"
         )
     return run_test_officer(

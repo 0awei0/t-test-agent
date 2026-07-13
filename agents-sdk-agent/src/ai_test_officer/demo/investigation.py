@@ -160,7 +160,10 @@ def run_investigation_demo(config: DemoRunConfig, scenario: str) -> RunRecord:
     if repaired:
         task = (
             f"修复验证：读取 {case.module} 的最新修复 diff 和现有契约测试，"
-            "自主选择相关测试，确认安全护栏已恢复，并给出是否可发布的结论。"
+            "自主选择相关测试；再写入一个 tests/test_agent_generated_regression.py 临时边界测试并执行。"
+            "优惠案例应验证 45% 被拒绝且同一合法 request_id 不重复扣库存；"
+            "退款案例应验证 customer 与 shipped 状态都被拒绝。"
+            "确认安全护栏已恢复，读取必要日志，并给出是否可发布的结论。"
         )
     return run_test_officer(
         RunConfig(

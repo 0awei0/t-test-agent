@@ -113,6 +113,7 @@ def run_test_officer(config: RunConfig) -> RunRecord:
         ],
     )
     record.events.phase(RunPhase.CHECKOUT, "done", detail="隔离工作区已就绪")
+    record.events.isolation()
 
     if workspace.checkout_status != "ready":
         record.planner_mode = "skipped"
@@ -153,6 +154,13 @@ def run_test_officer(config: RunConfig) -> RunRecord:
 
     record.events.phase(RunPhase.REPORTING, "start")
     record.memory_summary = build_run_memory(record, mode=config.memory_mode)
+    record.events.memory(
+        record.memory_summary.mode,
+        record.memory_summary.source_chars,
+        record.memory_summary.summary_chars,
+        record.memory_summary.compression_ratio,
+        len(record.memory_summary.artifact_paths),
+    )
     agent_summary = summarize_with_agents_sdk(record) if _agent_summary_enabled() else None
     write_outputs(record, agent_summary=agent_summary, finish_events=False)
     record.events.phase(RunPhase.REPORTING, "done")

@@ -73,6 +73,8 @@ class MemoryTests(unittest.TestCase):
             self.assertIn("do not use final head-only truncation", rendered)
             self.assertNotIn("SECRET_DIFF_", rendered)
             self.assertIn(diff_path, memory.artifact_paths)
+            self.assertGreater(memory.source_chars, len(rendered))
+            self.assertLess(memory.compression_ratio, 1)
 
     def test_build_run_memory_model_mode_uses_model_summary_when_available(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

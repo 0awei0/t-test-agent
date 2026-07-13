@@ -35,6 +35,92 @@ class FueStaticProject:
     deploy_doc_path: Path
 
 
+def write_local_replay_catalog(
+    runs_root: Path,
+    replay_runs: dict[str, tuple[str, Path]],
+    *,
+    default_task_id: str,
+) -> Path:
+    root = runs_root.expanduser().resolve()
+    target = root / "replays.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        json.dumps(
+            _replay_manifest(replay_runs, default_task_id=default_task_id),
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return target
+
+
+def export_replay_catalog(
+    replay_runs: dict[str, tuple[str, Path]],
+    dashboard_dir: Path,
+    *,
+    default_task_id: str,
+) -> Path:
+    """Add multiple sanitized real-run replays to an exported dashboard."""
+    root = dashboard_dir.expanduser().resolve() / "replays"
+    root.mkdir(parents=True, exist_ok=True)
+    for task_id, (_, run_dir) in replay_runs.items():
+        source = run_dir.expanduser().resolve()
+        metadata = _read_run_json(source / "run.json")
+        target = root / _safe_run_dir_name(task_id)
+        target.mkdir(parents=True, exist_ok=True)
+        _copy_sanitized_events(source / "events.jsonl", target / "events.jsonl", metadata)
+        _copy_sanitized_text_file(source / "report.html", target / "report.html", metadata)
+        _copy_relative_artifacts(source, target)
+    manifest = root / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            _replay_manifest(replay_runs, default_task_id=default_task_id),
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def _replay_manifest(
+    replay_runs: dict[str, tuple[str, Path]],
+    *,
+    default_task_id: str,
+) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    for task_id, (scenario, run_dir) in replay_runs.items():
+        source = run_dir.expanduser().resolve()
+        metadata = _read_run_json(source / "run.json")
+        event_counts: dict[str, int] = {}
+        events_file = source / "events.jsonl"
+        if events_file.exists():
+            for line in events_file.read_text(encoding="utf-8", errors="replace").splitlines():
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                event_type = str(event.get("type") or "") if isinstance(event, dict) else ""
+                event_counts[event_type] = event_counts.get(event_type, 0) + 1
+        memory = metadata.get("memory_summary") if isinstance(metadata.get("memory_summary"), dict) else {}
+        items.append(
+            {
+                "task_id": task_id,
+                "run_id": str(metadata.get("run_id") or source.name),
+                "scenario": scenario,
+                "verdict": str(metadata.get("verdict") or "unknown"),
+                "risk": str(metadata.get("risk") or "unknown"),
+                "tool_calls": event_counts.get("tool_call", 0) // 2,
+                "planner_steps": event_counts.get("planner", 0),
+                "compression_ratio": memory.get("compression_ratio", 1.0),
+            }
+        )
+    return {"default_task_id": default_task_id, "items": items}
+
+
 def publish_record(
     record: RunRecord,
     *,

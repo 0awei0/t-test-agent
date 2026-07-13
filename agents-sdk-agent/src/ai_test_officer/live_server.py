@@ -140,6 +140,8 @@ class _Handler(BaseHTTPRequestHandler):
                     "busy": bool(self.server.active_demo_runs),
                 },
             )
+        elif path == "/api/replays":
+            self._serve_replay_catalog()
         elif path == "/api/events":
             self._stream_events(qs)
         elif path == "/api/run.json":
@@ -276,6 +278,13 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_error(404, f"{name} not found")
             return
         self._send_file(target, content_type)
+
+    def _serve_replay_catalog(self) -> None:
+        target = self.server.run_root / "replays.json"
+        if not target.exists():
+            self._send_json(200, {"default_task_id": "task-45", "items": []})
+            return
+        self._send_file(target, "application/json")
 
     def _serve_run_path(self, qs: dict, rel: str) -> None:
         run_dir = self._run_dir(qs)

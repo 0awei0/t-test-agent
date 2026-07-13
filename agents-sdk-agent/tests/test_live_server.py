@@ -91,6 +91,18 @@ class LiveServerTests(unittest.TestCase):
         self.assertIn("release-guard", payload["scenarios"])
         conn.close()
 
+    def test_replay_catalog_route(self) -> None:
+        catalog = {"default_task_id": "task-45", "items": [{"task_id": "task-45"}]}
+        self.run_root.mkdir(parents=True, exist_ok=True)
+        (self.run_root / "replays.json").write_text(json.dumps(catalog), encoding="utf-8")
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        conn.request("GET", "/api/replays")
+        resp = conn.getresponse()
+
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(json.loads(resp.read()), catalog)
+        conn.close()
+
     def test_start_demo_rejects_unknown_scenario(self) -> None:
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
         body = json.dumps({"scenario": "remote-production"})

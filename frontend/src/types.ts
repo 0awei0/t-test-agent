@@ -47,6 +47,22 @@ export interface VerdictEvent {
   summary?: string;
 }
 
+export interface MemoryEvent {
+  mode: string;
+  source_chars: number;
+  summary_chars: number;
+  compression_ratio: number;
+  artifact_count: number;
+}
+
+export interface IsolationEvent {
+  workspace: string;
+  source_repo: string;
+  command_policy: string;
+  temp_write_scope: string;
+  remote_mutation: string;
+}
+
 export interface AppEvent {
   seq: number;
   ts: number;

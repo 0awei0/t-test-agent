@@ -39,6 +39,17 @@ class EventSinkTests(unittest.TestCase):
         self.assertEqual(events[2]["data"]["verdict"], "fail")
         self.assertEqual(events[3]["type"], "done")
 
+    def test_emits_memory_and_isolation_capabilities(self) -> None:
+        self.sink.isolation()
+        self.sink.memory("structured", 10_000, 3_000, 0.3, 4)
+
+        events = self._read()
+
+        self.assertEqual(events[0]["data"]["source_repo"], "read-only")
+        self.assertEqual(events[0]["data"]["remote_mutation"], "disabled")
+        self.assertEqual(events[1]["data"]["compression_ratio"], 0.3)
+        self.assertEqual(events[1]["data"]["artifact_count"], 4)
+
     def test_thread_safe_append(self) -> None:
         import threading
 

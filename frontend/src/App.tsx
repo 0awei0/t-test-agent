@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getExecutionCapability,
+  getReplayCatalog,
   openStream,
   isStaticReplay,
+  replayUrl,
   reportUrl,
   startDemoExecution,
 } from "./api";
+import type { ReplayItem } from "./api";
 import type {
   AppEvent,
   CommandEvent,
   EvidenceEvent,
+  IsolationEvent,
+  MemoryEvent,
   PhaseName,
   ToolCallEvent,
   VerdictEvent,
@@ -56,25 +61,36 @@ const DEMO_TASKS = [
 
 function DemoLauncher() {
   const [taskId, setTaskId] = useState<(typeof DEMO_TASKS)[number]["id"]>("task-45");
-  const [planReady, setPlanReady] = useState(false);
   const [copied, setCopied] = useState(false);
   const [canExecute, setCanExecute] = useState(false);
+  const [replays, setReplays] = useState<Record<string, ReplayItem>>({});
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
   const selectedTask = DEMO_TASKS.find((item) => item.id === taskId) ?? DEMO_TASKS[0];
+  const selectedReplay = replays[selectedTask.id];
   const liveRunId = `live-${selectedTask.id}`;
   const runCommand = `uv run ai-test-officer demo run --scenario ${selectedTask.scenario} --demo-root runs/live-demos --runs-root runs/live-runs --run-id ${liveRunId} --planner-mode agent-strict --allow-temp-test-code --visualize --dashboard-host 127.0.0.1 --dashboard-port 8789 --env .env`;
 
   useEffect(() => {
     void getExecutionCapability().then((capability) => setCanExecute(Boolean(capability?.can_execute)));
+    void getReplayCatalog().then((catalog) => {
+      if (!catalog) return;
+      setReplays(Object.fromEntries(catalog.items.map((item) => [item.task_id, item])));
+      if (DEMO_TASKS.some((task) => task.id === catalog.default_task_id)) {
+        setTaskId(catalog.default_task_id as (typeof DEMO_TASKS)[number]["id"]);
+      }
+    });
   }, []);
 
   const selectTask = (nextTaskId: (typeof DEMO_TASKS)[number]["id"]) => {
     setTaskId(nextTaskId);
-    setPlanReady(false);
     setCopied(false);
     setStartError("");
   };
+
+  const replayHref = selectedReplay && canExecute
+    ? `?run_id=${encodeURIComponent(selectedReplay.run_id)}`
+    : replayUrl(selectedTask.id);
 
   const copyRunCommand = async () => {
     try {
@@ -106,11 +122,11 @@ function DemoLauncher() {
       <header className="launcher-brand"><span>Release Guard</span><small>AI 测试官 · 比赛演示入口</small></header>
       <section className="launcher-hero compact">
         <div><span className="eyebrow">SYNTHETIC TASK · REAL AGENT RUN</span><h1>需求与变更一一对应，生成计划后立即验证</h1><p>每张任务卡绑定一个 TAPD 需求和一个工蜂 MR；线上动态复盘真实脱敏事件，本地可一键启动 Agent。</p></div>
-        <a className="replay-entry" href="?mode=static">观看真实执行动态复盘 →</a>
+        <a className="replay-entry" href={replayUrl("task-45")}>播放复杂 MR 真实回放 →</a>
       </section>
       <section className="task-workbench">
-        <div className="task-library"><div className="section-heading"><div><span>01 · 选择任务</span><h2>TAPD × 工蜂 MR</h2></div><em>一一对应 · 合成数据</em></div><div className="task-list">{DEMO_TASKS.map((item) => <button key={item.id} type="button" className={`task-card ${item.expected} ${item.id === taskId ? "selected" : ""}`} onClick={() => selectTask(item.id)} aria-pressed={item.id === taskId}><div className="task-card-head"><span>{item.tapdId}</span><span>MR {item.iid}</span><em>{item.expected === "pass" ? "修复验证" : "风险阻断"}</em></div><strong>{item.requirement}</strong><p>{item.mrTitle}</p><small>{item.summary}</small></button>)}</div></div>
-        <div className="plan-builder"><div className="section-heading"><div><span>02 · Agent 规划</span><h2>测试计划</h2></div><em>{planReady ? "计划已生成" : "等待生成"}</em></div>{planReady ? <div className="test-plan"><div className="pair-summary"><div><span>需求</span><b>{selectedTask.tapdId}</b><p>{selectedTask.requirement}</p></div><div><span>变更</span><b>MR {selectedTask.iid}</b><p>{selectedTask.mrTitle}</p></div></div><div className="plan-risk"><span>核心风险</span><strong>{selectedTask.risk}</strong></div><div className="acceptance"><b>验收标准</b>{selectedTask.acceptance.map((item) => <span key={item}>✓ {item}</span>)}</div><table className="plan-table"><thead><tr><th>验证层</th><th>验证目标</th><th>预期证据</th></tr></thead><tbody>{selectedTask.checks.map(([kind, target, goal]) => <tr key={kind}><td>{kind}</td><td>{target}</td><td>{goal}</td></tr>)}</tbody></table><div className="plan-actions"><button type="button" className="execute-button" onClick={() => { void startExecution(); }} disabled={starting}>{starting ? "正在启动 Agent…" : canExecute ? "开始实际执行" : "在本地启动实际执行"}</button><button type="button" className="copy-command" onClick={() => { void copyRunCommand(); }}>{copied ? "命令已复制" : "复制本地命令"}</button></div>{startError && <p className="execution-note error">{startError}</p>}<p className="execution-note">执行后自动进入实时驾驶舱，展示 Agent 阶段、工具调用、测试命令、失败日志、截图与最终结论。</p></div> : <div className="plan-empty"><span>先确认任务映射</span><h3>{selectedTask.tapdId} ↔ MR {selectedTask.iid}</h3><p>Agent 将把需求验收点、代码风险和验证证据整理为可执行计划。</p><button type="button" onClick={() => setPlanReady(true)}>生成测试计划</button></div>}</div>
+        <div className="task-library"><div className="section-heading"><div><span>01 · 选择任务</span><h2>TAPD × 工蜂 MR</h2></div><em>一一对应 · 合成数据</em></div><div className="task-list">{DEMO_TASKS.map((item) => { const replay = replays[item.id]; return <button key={item.id} type="button" className={`task-card ${item.expected} ${item.id === taskId ? "selected" : ""}`} onClick={() => selectTask(item.id)} aria-pressed={item.id === taskId}><div className="task-card-head"><span>{item.tapdId}</span><span>MR {item.iid}</span><em>{replay ? "● 已有真实回放" : item.expected === "pass" ? "修复验证" : "风险阻断"}</em></div><strong>{item.requirement}</strong><p>{item.mrTitle}</p><small>{item.summary}</small>{replay && <span className="replay-metrics">{replay.tool_calls} 次工具调用 · {replay.verdict}/{replay.risk}</span>}</button>; })}</div></div>
+        <div className="plan-builder"><div className="section-heading"><div><span>02 · Agent 计划</span><h2>可执行测试计划</h2></div><em>随 MR 即时更新</em></div><div className="test-plan"><div className="pair-summary"><div><span>需求</span><b>{selectedTask.tapdId}</b><p>{selectedTask.requirement}</p></div><div><span>变更</span><b>MR {selectedTask.iid}</b><p>{selectedTask.mrTitle}</p></div></div><div className="plan-risk"><span>核心风险</span><strong>{selectedTask.risk}</strong></div><div className="acceptance"><b>验收标准</b>{selectedTask.acceptance.map((item) => <span key={item}>✓ {item}</span>)}</div><table className="plan-table"><thead><tr><th>验证层</th><th>验证目标</th><th>预期证据</th></tr></thead><tbody>{selectedTask.checks.map(([kind, target, goal]) => <tr key={kind}><td>{kind}</td><td>{target}</td><td>{goal}</td></tr>)}</tbody></table>{selectedReplay && <div className="replay-summary"><strong>真实运行已就绪</strong><span>{selectedReplay.tool_calls} 次工具调用</span><span>{selectedReplay.planner_steps} 个策略事件</span><span>上下文保留 {(selectedReplay.compression_ratio * 100).toFixed(1)}%</span></div>}<div className="plan-actions primary-replay">{selectedReplay ? <a className="execute-button replay-button" href={replayHref}>播放此 MR 真实动态回放</a> : canExecute ? <button type="button" className="execute-button" onClick={() => { void startExecution(); }} disabled={starting}>{starting ? "正在启动 Agent…" : "开始实际执行并生成回放"}</button> : <span className="execute-button replay-button unavailable">该回放尚未生成</span>}{selectedReplay && canExecute ? <button type="button" className="copy-command" onClick={() => { void startExecution(); }} disabled={starting}>{starting ? "正在启动…" : "重新实际执行"}</button> : <button type="button" className="copy-command" onClick={() => { void copyRunCommand(); }}>{copied ? "命令已复制" : "复制本地复跑命令"}</button>}</div>{startError && <p className="execution-note error">{startError}</p>}<p className="execution-note">回放来自该 MR 已完成的真实 Agent 运行；本地工作台还可重新执行并实时观看。</p></div></div>
       </section>
       <section className="workflow-strip"><span><b>1</b>理解需求与 diff</span><span><b>2</b>形成风险策略</span><span><b>3</b>执行单测 / API / 浏览器</span><span><b>4</b>读取日志与证据</span><span><b>5</b>给出发布决策</span></section>
     </main>
@@ -129,6 +145,8 @@ export default function App() {
   const [changedFiles, setChangedFiles] = useState<{ status: string; path: string }[]>([]);
   const [evidence, setEvidence] = useState<EvidenceEvent[]>([]);
   const [verdict, setVerdict] = useState<VerdictEvent | null>(null);
+  const [memory, setMemory] = useState<MemoryEvent | null>(null);
+  const [isolation, setIsolation] = useState<IsolationEvent | null>(null);
   const [done, setDone] = useState(false);
   const [connected, setConnected] = useState(false);
   const failureRef = useRef<HTMLDivElement | null>(null);
@@ -171,6 +189,12 @@ export default function App() {
           case "verdict":
             setVerdict(d as unknown as VerdictEvent);
             break;
+          case "memory":
+            setMemory(d as unknown as MemoryEvent);
+            break;
+          case "isolation":
+            setIsolation(d as unknown as IsolationEvent);
+            break;
           case "done":
             setDone(true);
             break;
@@ -184,10 +208,15 @@ export default function App() {
   }, [runId, staticMode]);
 
   const commandList = useMemo(() => Object.values(commands), [commands]);
+  const effectiveCommandList = useMemo(() => {
+    const latest = new Map<string, CommandEvent>();
+    for (const command of commandList) latest.set(command.command, command);
+    return Array.from(latest.values());
+  }, [commandList]);
   const toolCallList = useMemo(() => Object.values(toolCalls), [toolCalls]);
   const failures = useMemo(
-    () => commandList.filter((c) => c.status === "fail" || c.status === "blocked"),
-    [commandList]
+    () => effectiveCommandList.filter((c) => c.status === "fail" || c.status === "blocked"),
+    [effectiveCommandList]
   );
 
   useEffect(() => {
@@ -201,7 +230,7 @@ export default function App() {
   }
 
   const running = !done && !verdict;
-  const verificationCount = commandList.filter((command) => command.status === "ok").length;
+  const verificationCount = effectiveCommandList.filter((command) => command.status === "ok").length;
 
   return (
     <div className="app">
@@ -211,6 +240,7 @@ export default function App() {
           <span className="sub">AI 测试官 · 发布决策驾驶舱</span>
         </div>
         <div className="runmeta">
+          {staticMode && <a className="backlink" href="./">← 选择其他 MR</a>}
           <span className="runid">{staticMode ? "真实执行动态复盘" : runId}</span>
           <span className={`conn ${connected ? "on" : ""}`}>
             {connected ? (staticMode ? (done ? "复盘完成" : "动态播放中") : done ? "已结束" : "直播中") : "连接中…"}
@@ -232,7 +262,7 @@ export default function App() {
         </div>
         <div className="risk-map">
           <div><strong>{changedFiles.length}</strong><span>变更文件</span></div>
-          <div><strong>{verificationCount}/{commandList.length}</strong><span>验证通过</span></div>
+          <div><strong>{verificationCount}/{effectiveCommandList.length}</strong><span>最终验证通过</span></div>
           <div><strong>{evidence.length}</strong><span>可复核证据</span></div>
           <div><strong>{failures.length}</strong><span>阻断信号</span></div>
         </div>
@@ -260,6 +290,17 @@ export default function App() {
         <div className="panel">
           <h2>策略形成过程 {plannerSteps.length > 0 && <span className="count">{plannerSteps.length}</span>}</h2>
           <StrategyPanel steps={plannerSteps} />
+        </div>
+      </section>
+
+      <section className="grid2 capability-grid">
+        <div className="panel capability-panel memory-panel">
+          <h2>上下文记忆压缩</h2>
+          {memory ? <><strong>{(memory.compression_ratio * 100).toFixed(1)}%</strong><p>{memory.source_chars.toLocaleString()} 字符压缩为 {memory.summary_chars.toLocaleString()} 字符，原始 diff 与日志保留在 {memory.artifact_count} 个隔离证据中，Agent 可按需回读。</p></> : <p className="muted">运行结束时生成结构化记忆摘要…</p>}
+        </div>
+        <div className="panel capability-panel isolation-panel">
+          <h2>安全隔离边界</h2>
+          {isolation ? <div className="guardrails"><span>✓ 原仓库只读</span><span>✓ 隔离副本执行</span><span>✓ 测试命令白名单</span><span>✓ 仅测试/证据目录可写</span><span>✓ 禁止远端变更</span></div> : <p className="muted">正在确认隔离工作区与命令策略…</p>}
         </div>
       </section>
 

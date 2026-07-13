@@ -7,6 +7,38 @@ export interface ExecutionCapability {
   busy: boolean;
 }
 
+export interface ReplayItem {
+  task_id: string;
+  run_id: string;
+  scenario: string;
+  verdict: string;
+  risk: string;
+  tool_calls: number;
+  planner_steps: number;
+  compression_ratio: number;
+}
+
+export interface ReplayCatalog {
+  default_task_id: string;
+  items: ReplayItem[];
+}
+
+export async function getReplayCatalog(): Promise<ReplayCatalog | null> {
+  const paths = isStaticReplay()
+    ? ["replays/manifest.json"]
+    : ["/api/replays", "replays/manifest.json"];
+  for (const path of paths) {
+    try {
+      const response = await fetch(path, { cache: "no-store" });
+      if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) continue;
+      return (await response.json()) as ReplayCatalog;
+    } catch {
+      // Try the static catalog fallback.
+    }
+  }
+  return null;
+}
+
 export async function getExecutionCapability(): Promise<ExecutionCapability | null> {
   try {
     const response = await fetch("/api/capabilities", { cache: "no-store" });
@@ -38,6 +70,15 @@ export async function startDemoExecution(scenario: string): Promise<string> {
  */
 export function isStaticReplay(): boolean {
   return new URLSearchParams(window.location.search).get("mode") === "static";
+}
+
+export function replayTaskId(): string {
+  return new URLSearchParams(window.location.search).get("replay") ?? "";
+}
+
+export function replayUrl(taskId: string): string {
+  const params = new URLSearchParams({ mode: "static", replay: taskId });
+  return `?${params.toString()}`;
 }
 
 /**
@@ -86,7 +127,9 @@ async function replayStatic(
   onClose: () => void
 ): Promise<void> {
   try {
-    const res = await fetch("events.jsonl", { cache: "no-store" });
+    const taskId = replayTaskId();
+    const path = taskId ? `replays/${encodeURIComponent(taskId)}/events.jsonl` : "events.jsonl";
+    const res = await fetch(path, { cache: "no-store" });
     if (!res.ok) {
       onClose();
       return;
@@ -131,7 +174,8 @@ export function fileUrl(runId: string, relPath: string): string {
   const safePath = safeRelativePath(relPath);
   if (!safePath) return "#";
   if (isStaticReplay()) {
-    return safePath;
+    const taskId = replayTaskId();
+    return taskId ? `replays/${encodeURIComponent(taskId)}/${safePath}` : safePath;
   }
   return `/files/${safePath}?run_id=${encodeURIComponent(runId)}`;
 }
@@ -150,7 +194,8 @@ function safeRelativePath(value: string): string | null {
  */
 export function reportUrl(runId: string): string {
   if (isStaticReplay()) {
-    return "report.html";
+    const taskId = replayTaskId();
+    return taskId ? `replays/${encodeURIComponent(taskId)}/report.html` : "report.html";
   }
   return `/api/report.html?run_id=${encodeURIComponent(runId)}`;
 }

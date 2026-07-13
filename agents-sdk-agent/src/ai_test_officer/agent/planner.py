@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import signal
 import threading
 from dataclasses import dataclass
@@ -316,7 +317,7 @@ def run_agent_planner(
     )
     prompt = _planner_prompt(record)
     try:
-        with _planner_timeout(DEFAULT_AGENT_PLANNER_TIMEOUT_SEC):
+        with _planner_timeout(_planner_timeout_seconds()):
             result = Runner.run_sync(agent, prompt, max_turns=max_turns, hooks=_LiveRunHooks(sink))
         final_output = str(getattr(result, "final_output", result))
         record.planner_trace.append("agent:completed")
@@ -349,6 +350,16 @@ def _planner_timeout(seconds: int) -> Iterator[None]:
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, previous_handler)
+
+
+def _planner_timeout_seconds() -> int:
+    raw = os.environ.get("AI_TEST_OFFICER_PLANNER_TIMEOUT_SEC", "")
+    if not raw:
+        return DEFAULT_AGENT_PLANNER_TIMEOUT_SEC
+    try:
+        return max(30, min(int(raw), 900))
+    except ValueError:
+        return DEFAULT_AGENT_PLANNER_TIMEOUT_SEC
 
 
 def _planner_prompt(record: RunRecord) -> str:

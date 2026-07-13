@@ -6,12 +6,12 @@ import re
 from pathlib import Path
 
 from .models import RunRecord
-from .execution.failure import classify_command_failure
+from .execution.failure import classify_command_failure, effective_commands
 from .redaction import redact_secrets
 
 
 def finalize_record(record: RunRecord) -> RunRecord:
-    failures = [command for command in record.commands if command.returncode != 0]
+    failures = [command for command in effective_commands(record.commands) if command.returncode != 0]
     if failures:
         record.verdict = "fail"
         record.risk = "high"
@@ -60,7 +60,7 @@ def _deterministic_risk_findings(record: RunRecord) -> list[str]:
         else:
             reason = "变更影响需结合上下文与执行证据确认"
         findings.append(f"{item.status} {item.path}：{reason}。")
-    for command in record.commands:
+    for command in effective_commands(record.commands):
         if command.returncode != 0:
             findings.append(
                 f"{command.command} 执行失败，分类为 {classify_command_failure(command)[0]}。"
@@ -252,7 +252,7 @@ def render_html(markdown: str, *, record: RunRecord | None = None) -> str:
 
 
 def _findings(record: RunRecord) -> str:
-    failures = [command for command in record.commands if command.returncode != 0]
+    failures = [command for command in effective_commands(record.commands) if command.returncode != 0]
     if not record.commands:
         return "- 未执行命令，因为没有选出可安全执行的定向测试命令。"
     if not failures:
@@ -503,7 +503,7 @@ def _render_structured_html(record: RunRecord, markdown: str) -> str:
         "</li>"
         for item in record.commands
     ) or "<li>无</li>"
-    command_failures = sum(1 for item in record.commands if item.returncode != 0)
+    command_failures = sum(1 for item in effective_commands(record.commands) if item.returncode != 0)
     temp_test_label = "是" if record.generated_files else "否"
     required_label = "通过" if record.required_tool_check.passed else "未通过"
     safety = "".join(
@@ -933,7 +933,7 @@ def _html_text_list(items: list[str]) -> str:
 
 
 def _html_findings(record: RunRecord) -> str:
-    failures = [command for command in record.commands if command.returncode != 0]
+    failures = [command for command in effective_commands(record.commands) if command.returncode != 0]
     if not record.commands:
         return "<li>未选出可安全执行的定向测试命令。</li>"
     if not failures:
