@@ -11,11 +11,14 @@ import {
 import type { PlaybackState, ReplayItem, StreamHandle } from "./api";
 import type {
   AppEvent,
+  AdaptationEvent,
   CommandEvent,
   EvidenceEvent,
   IsolationEvent,
   MemoryEvent,
   PhaseName,
+  ProvenanceEvent,
+  SafetyCheckEvent,
   ToolCallEvent,
   VerdictEvent,
 } from "./types";
@@ -147,6 +150,9 @@ export default function App() {
   const [verdict, setVerdict] = useState<VerdictEvent | null>(null);
   const [memory, setMemory] = useState<MemoryEvent | null>(null);
   const [isolation, setIsolation] = useState<IsolationEvent | null>(null);
+  const [provenance, setProvenance] = useState<ProvenanceEvent | null>(null);
+  const [safetyChecks, setSafetyChecks] = useState<SafetyCheckEvent[]>([]);
+  const [adaptation, setAdaptation] = useState<AdaptationEvent | null>(null);
   const [done, setDone] = useState(false);
   const [connected, setConnected] = useState(false);
   const [playback, setPlayback] = useState<PlaybackState>({ current: 0, total: 0, paused: false, speed: 1, finished: false });
@@ -167,6 +173,9 @@ export default function App() {
       setVerdict(null);
       setMemory(null);
       setIsolation(null);
+      setProvenance(null);
+      setSafetyChecks([]);
+      setAdaptation(null);
       setDone(false);
       setConnected(false);
     };
@@ -211,6 +220,15 @@ export default function App() {
             break;
           case "isolation":
             setIsolation(d as unknown as IsolationEvent);
+            break;
+          case "provenance":
+            setProvenance({ ...d, started_at: event.ts } as unknown as ProvenanceEvent);
+            break;
+          case "safety_check":
+            setSafetyChecks((prev) => [...prev, d as unknown as SafetyCheckEvent]);
+            break;
+          case "adaptation":
+            setAdaptation(d as unknown as AdaptationEvent);
             break;
           case "done":
             setDone(true);
@@ -299,6 +317,15 @@ export default function App() {
         )}
       </section>
 
+      {provenance && (
+        <section className="provenance-panel" aria-label="真实 Agent 运行来源">
+          <div><span>运行来源</span><strong>{provenance.planner_mode}</strong><small>{provenance.run_id}</small></div>
+          <div><span>模型自主工具</span><strong>{provenance.model_tool_calls}/{provenance.tool_calls}</strong><small>非预制前端动画</small></div>
+          <div><span>严格工具检查</span><strong>{provenance.strict_tools_passed ? "通过" : "未通过"}</strong><small>{provenance.commands} 命令 · {provenance.generated_tests} 临时测试</small></div>
+          <div><span>运行时间</span><strong>{new Date(provenance.started_at * 1000).toLocaleString("zh-CN", { hour12: false })}</strong><small>{provenance.evidence} 份可复核证据</small></div>
+        </section>
+      )}
+
       <PhaseStepper
         order={PHASE_ORDER}
         labels={PHASE_LABELS}
@@ -319,14 +346,21 @@ export default function App() {
         </div>
       </section>
 
+      {adaptation && (
+        <section className="adaptation-banner">
+          <b>失败驱动补测已完成</b>
+          <span>{adaptation.detail}</span>
+        </section>
+      )}
+
       <section className="grid2 capability-grid">
         <div className="panel capability-panel memory-panel">
-          <h2>上下文记忆压缩</h2>
-          {memory ? <><strong>{(memory.compression_ratio * 100).toFixed(1)}%</strong><p>{memory.source_chars.toLocaleString()} 字符压缩为 {memory.summary_chars.toLocaleString()} 字符，原始 diff 与日志保留在 {memory.artifact_count} 个隔离证据中，Agent 可按需回读。</p></> : <p className="muted">运行结束时生成结构化记忆摘要…</p>}
+          <h2>运行上下文摘要 / 归档压缩</h2>
+          {memory ? <><strong>{(memory.compression_ratio * 100).toFixed(1)}%</strong><p>运行结束后将 {memory.source_chars.toLocaleString()} 字符整理为 {memory.summary_chars.toLocaleString()} 字符结构化摘要；原始 diff、日志和 {memory.artifact_count} 个隔离证据仍可回读。</p></> : <p className="muted">运行结束时生成结构化上下文摘要…</p>}
         </div>
         <div className="panel capability-panel isolation-panel">
           <h2>安全隔离边界</h2>
-          {isolation ? <div className="guardrails"><span>✓ 原仓库只读</span><span>✓ 隔离副本执行</span><span>✓ 测试命令白名单</span><span>✓ 仅测试/证据目录可写</span><span>✓ 禁止远端变更</span></div> : <p className="muted">正在确认隔离工作区与命令策略…</p>}
+          {isolation ? <><div className="guardrails"><span>✓ 原仓库只读</span><span>✓ 隔离副本执行</span><span>✓ 测试命令白名单</span><span>✓ 仅测试/证据目录可写</span><span>✓ 禁止远端变更</span></div>{safetyChecks.filter((item) => item.status === "blocked").map((item, index) => <div className="safety-block" key={`${item.target}-${index}`}><b>已真实拦截</b><code>{item.target}</code><span>{item.reason}</span></div>)}</> : <p className="muted">正在确认隔离工作区与命令策略…</p>}
         </div>
       </section>
 

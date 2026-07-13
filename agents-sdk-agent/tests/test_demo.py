@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -13,6 +14,7 @@ from ai_test_officer.demo import (
     create_investigation_demo,
     create_release_guard_demo,
     run_investigation_demo,
+    run_agent_loop_demo,
     run_fullstack_demo,
     run_release_guard_demo,
 )
@@ -42,6 +44,26 @@ class FullstackDemoTests(unittest.TestCase):
             self.assertEqual(changed.strip(), "checkout.py")
             self.assertTrue((repo / "tests" / "test_checkout.py").exists())
             self.assertFalse((repo / "tests" / "test_agent_generated_discount_boundary.py").exists())
+
+    def test_agent_loop_demo_records_a_real_safety_policy_block(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with _without_model_keys():
+                record = run_agent_loop_demo(
+                    DemoRunConfig(
+                        demo_root=root / "demos",
+                        planner_mode="deterministic",
+                        allow_temp_test_code=True,
+                        runs_root=root / "runs",
+                        run_id="safety-agent-loop",
+                    )
+                )
+
+            blocked = [item for item in record.safety_checks if item.status == "blocked"]
+            self.assertEqual(len(blocked), 1)
+            self.assertEqual(blocked[0].target, "git push origin main")
+            event_types = [json.loads(line)["type"] for line in record.events.path.read_text().splitlines()]
+            self.assertIn("safety_check", event_types)
 
     def test_run_fullstack_demo_generates_report_and_records_skill_mcp(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

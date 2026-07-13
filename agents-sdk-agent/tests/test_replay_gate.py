@@ -60,7 +60,16 @@ class ReplayGateTests(unittest.TestCase):
                 for index, event_type in enumerate(sorted(event_types), 1)
             )
             (run_dir / "events.jsonl").write_text(events + "\n", encoding="utf-8")
-            (replay_dir / "events.jsonl").write_text(events + "\n", encoding="utf-8")
+            public_event_types = set(event_types) | {"provenance"}
+            if spec.task_id == DEFAULT_REPLAY_TASK_ID:
+                public_event_types.add("adaptation")
+            if spec.task_id == "task-53":
+                public_event_types.add("safety_check")
+            public_events = "\n".join(
+                json.dumps({"seq": index, "type": event_type, "data": {}})
+                for index, event_type in enumerate(sorted(public_event_types), 1)
+            )
+            (replay_dir / "events.jsonl").write_text(public_events + "\n", encoding="utf-8")
             (replay_dir / "report.html").write_text("<p>safe report</p>", encoding="utf-8")
             items.append(
                 {

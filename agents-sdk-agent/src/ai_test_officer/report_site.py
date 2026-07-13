@@ -317,6 +317,7 @@ def _copy_sanitized_events(source: Path, target: Path, run_metadata: dict[str, A
         if isinstance(scrubbed, dict):
             events.append(scrubbed)
     if events:
+        events = _enrich_public_events(events, run_metadata)
         # Older runs emitted ``done`` before the final reporting-phase event.
         # Static replay closes on ``done``, so always normalize it to the end.
         done_events = [event for event in events if event.get("type") == "done"]
@@ -328,6 +329,56 @@ def _copy_sanitized_events(source: Path, target: Path, run_metadata: dict[str, A
             "\n".join(json.dumps(event, ensure_ascii=False) for event in events) + "\n",
             encoding="utf-8",
         )
+
+
+def _enrich_public_events(events: list[dict[str, Any]], metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    event_types = {str(event.get("type") or "") for event in events}
+    enriched = list(events)
+    agent_turns = metadata.get("agent_turns") if isinstance(metadata.get("agent_turns"), list) else []
+    commands = metadata.get("commands") if isinstance(metadata.get("commands"), list) else []
+    generated = metadata.get("generated_files") if isinstance(metadata.get("generated_files"), list) else []
+    evidence = metadata.get("evidence_files") if isinstance(metadata.get("evidence_files"), list) else []
+    tool_check = metadata.get("required_tool_check") if isinstance(metadata.get("required_tool_check"), dict) else {}
+    first_ts = next((event.get("ts") for event in events if isinstance(event.get("ts"), (int, float))), 0)
+    if "provenance" not in event_types:
+        enriched.append(
+            {
+                "ts": first_ts,
+                "type": "provenance",
+                "data": {
+                    "run_id": metadata.get("run_id"),
+                    "planner_mode": metadata.get("planner_mode"),
+                    "strict_tools_passed": tool_check.get("passed") is True,
+                    "tool_calls": len(agent_turns),
+                    "model_tool_calls": sum(
+                        1 for turn in agent_turns if isinstance(turn, dict) and turn.get("model_initiated") is True
+                    ),
+                    "commands": len(commands),
+                    "generated_tests": len(generated),
+                    "evidence": len(evidence),
+                },
+            }
+        )
+    observed_tools = [str(turn.get("tool") or "") for turn in agent_turns if isinstance(turn, dict)]
+    has_failed_command = any(isinstance(command, dict) and command.get("returncode") not in {None, 0} for command in commands)
+    if "adaptation" not in event_types and has_failed_command and "read_test_log" in observed_tools and generated:
+        enriched.append(
+            {
+                "ts": first_ts,
+                "type": "adaptation",
+                "data": {
+                    "kind": "failure-driven-test-expansion",
+                    "status": "completed",
+                    "detail": "测试失败后读取日志，并补充隔离边界测试继续验证；失败证据保留用于发布决策。",
+                },
+            }
+        )
+    if "safety_check" not in event_types:
+        for check in metadata.get("safety_checks", []):
+            if not isinstance(check, dict) or check.get("status") != "blocked":
+                continue
+            enriched.append({"ts": first_ts, "type": "safety_check", "data": _scrub_event(check, metadata)})
+    return enriched
 
 
 def _scrub_event(value: Any, run_metadata: dict[str, Any]) -> Any:
@@ -416,6 +467,7 @@ def _public_run_json(data: dict[str, Any]) -> dict[str, Any]:
         "tools_used": data.get("tools_used", []),
         "agent_turns": data.get("agent_turns", []),
         "required_tool_check": data.get("required_tool_check", {}),
+        "safety_checks": data.get("safety_checks", []),
         "memory_summary": {
             "mode": memory.get("mode"),
             "source_chars": memory.get("source_chars"),

@@ -50,6 +50,31 @@ class EventSinkTests(unittest.TestCase):
         self.assertEqual(events[1]["data"]["compression_ratio"], 0.3)
         self.assertEqual(events[1]["data"]["artifact_count"], 4)
 
+    def test_emits_provenance_safety_and_adaptation(self) -> None:
+        self.sink.provenance(
+            run_id="run-1",
+            planner_mode="agent-strict",
+            strict_tools_passed=True,
+            tool_calls=8,
+            model_tool_calls=8,
+            commands=2,
+            generated_tests=1,
+            evidence=1,
+        )
+        self.sink.safety_check(
+            action="execute",
+            target="git push origin main",
+            status="blocked",
+            blocked_by="local_safety_policy",
+            reason="remote mutation is blocked",
+        )
+        self.sink.adaptation(kind="failure-driven-test-expansion", status="completed", detail="added test")
+
+        events = self._read()
+        self.assertEqual([event["type"] for event in events], ["provenance", "safety_check", "adaptation"])
+        self.assertTrue(events[0]["data"]["strict_tools_passed"])
+        self.assertEqual(events[1]["data"]["status"], "blocked")
+
     def test_thread_safe_append(self) -> None:
         import threading
 

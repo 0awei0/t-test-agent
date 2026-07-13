@@ -108,6 +108,7 @@ def run_agent_loop_demo(config: DemoRunConfig) -> RunRecord:
             planner_mode=config.planner_mode,
             memory_mode=config.memory_mode,
             max_agent_turns=config.max_agent_turns,
+            safety_probe=True,
         )
     )
 

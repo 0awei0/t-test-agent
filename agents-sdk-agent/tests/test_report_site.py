@@ -225,7 +225,8 @@ class ReportSiteTests(unittest.TestCase):
             self.assertNotIn(str(root), events)
             exported_events = [json.loads(line) for line in events.splitlines()]
             self.assertEqual(exported_events[-1]["type"], "done")
-            self.assertEqual([event["seq"] for event in exported_events], [1, 2, 3])
+            self.assertIn("provenance", [event["type"] for event in exported_events])
+            self.assertEqual([event["seq"] for event in exported_events], [1, 2, 3, 4])
             self.assertFalse((exported.public_dir / "dashboard" / "logs").exists())
 
     def test_exports_multiple_sanitized_replays_and_manifest(self) -> None:

@@ -63,6 +63,32 @@ export interface IsolationEvent {
   remote_mutation: string;
 }
 
+export interface ProvenanceEvent {
+  run_id: string;
+  planner_mode: string;
+  strict_tools_passed: boolean;
+  tool_calls: number;
+  model_tool_calls: number;
+  commands: number;
+  generated_tests: number;
+  evidence: number;
+  started_at: number;
+}
+
+export interface SafetyCheckEvent {
+  action: string;
+  target: string;
+  status: string;
+  blocked_by: string;
+  reason: string;
+}
+
+export interface AdaptationEvent {
+  kind: string;
+  status: string;
+  detail: string;
+}
+
 export interface AppEvent {
   seq: number;
   ts: number;

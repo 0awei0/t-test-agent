@@ -127,6 +127,43 @@ class EventSink:
             remote_mutation="disabled",
         )
 
+    def provenance(
+        self,
+        *,
+        run_id: str,
+        planner_mode: str,
+        strict_tools_passed: bool,
+        tool_calls: int,
+        model_tool_calls: int,
+        commands: int,
+        generated_tests: int,
+        evidence: int,
+    ) -> None:
+        self.emit(
+            "provenance",
+            run_id=run_id,
+            planner_mode=planner_mode,
+            strict_tools_passed=strict_tools_passed,
+            tool_calls=tool_calls,
+            model_tool_calls=model_tool_calls,
+            commands=commands,
+            generated_tests=generated_tests,
+            evidence=evidence,
+        )
+
+    def safety_check(self, *, action: str, target: str, status: str, blocked_by: str, reason: str) -> None:
+        self.emit(
+            "safety_check",
+            action=action,
+            target=target,
+            status=status,
+            blocked_by=blocked_by,
+            reason=reason,
+        )
+
+    def adaptation(self, *, kind: str, status: str, detail: str) -> None:
+        self.emit("adaptation", kind=kind, status=status, detail=detail)
+
     def verdict(
         self,
         verdict: str,

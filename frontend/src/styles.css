@@ -48,6 +48,16 @@ body {
 .replay-controls button:hover, .replay-controls button.active { border-color: var(--active); background: var(--active-bg); color: var(--active); }
 .replay-controls button:disabled { cursor: not-allowed; opacity: .45; }
 .replay-progress { min-width: 54px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
+.provenance-panel { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 14px 0; overflow: hidden; border: 1px solid #c8d7ee; border-radius: 13px; background: #c8d7ee; }
+.provenance-panel > div { display: grid; gap: 2px; min-width: 0; padding: 13px 15px; background: #f8fbff; }
+.provenance-panel span, .provenance-panel small { color: var(--muted); font-size: 11px; }
+.provenance-panel strong { overflow-wrap: anywhere; color: #173f80; font-size: 14px; }
+.adaptation-banner { display: flex; align-items: center; gap: 12px; margin: 14px 0; padding: 13px 16px; border: 1px solid #f0c36b; border-radius: 11px; background: #fff8e8; color: #6f4b05; }
+.adaptation-banner b { flex: 0 0 auto; }
+.safety-block { display: grid; grid-template-columns: auto 1fr; gap: 4px 9px; margin-top: 12px; padding: 10px 12px; border: 1px solid #efaba5; border-radius: 9px; background: #fff1ef; font-size: 12px; }
+.safety-block b { color: var(--fail); }
+.safety-block code { overflow-wrap: anywhere; color: #711e1a; }
+.safety-block span { grid-column: 1 / -1; color: #774945; }
 .launcher-shell { max-width: 1120px; margin: 0 auto; padding: 28px 20px 64px; }
 .launcher-brand { display: flex; align-items: baseline; gap: 10px; margin-bottom: 26px; color: var(--brand); font-size: 22px; font-weight: 850; }
 .launcher-brand small { color: var(--muted); font-size: 13px; font-weight: 600; }
@@ -707,6 +717,7 @@ body {
 
 @media (max-width: 820px) {
   .replay-notice { align-items: flex-start; flex-direction: column; }
+  .provenance-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   body { font-size: 14px; }
   .app { padding: 14px 12px 40px; }
   .topbar { align-items: flex-start; gap: 10px; flex-wrap: wrap; }

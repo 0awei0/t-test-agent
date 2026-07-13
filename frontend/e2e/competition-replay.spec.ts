@@ -23,7 +23,9 @@ test("replays pass and blocked decisions with Agent evidence", async ({ page }) 
   await page.goto("/?mode=static&replay=task-45");
   await expect(page.getByText("建议阻断", { exact: true })).toBeVisible();
   await expect(page.getByText("Agent 工具调用", { exact: false })).toBeVisible();
-  await expect(page.getByText("上下文记忆压缩", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("真实 Agent 运行来源")).toContainText("agent-strict");
+  await expect(page.getByText("失败驱动补测已完成", { exact: true })).toBeVisible();
+  await expect(page.getByText("运行上下文摘要 / 归档压缩", { exact: true })).toBeVisible();
   await expect(page.getByText("安全隔离边界", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByText("复盘完成", { exact: true })).toBeVisible();
@@ -31,6 +33,10 @@ test("replays pass and blocked decisions with Agent evidence", async ({ page }) 
   await page.goto("/?mode=static&replay=task-43");
   await expect(page.getByText("建议发布", { exact: true })).toBeVisible();
   await expect(page.getByText("风险等级：low", { exact: true })).toBeVisible();
+
+  await page.goto("/?mode=static&replay=task-53");
+  await expect(page.getByText("已真实拦截", { exact: true })).toBeVisible();
+  await expect(page.getByText("git push origin main", { exact: true })).toBeVisible();
 });
 
 test("fits the competition workbench on a mobile viewport", async ({ page }) => {
@@ -95,6 +101,9 @@ function replayEvents(taskId: string): string {
     ["command", { id: "command-1", command: "python -m unittest", status: passes ? "ok" : "fail", returncode: passes ? 0 : 1 }],
     ["evidence", { path: "evidence/result.txt", kind: "log", caption: "脱敏证据" }],
     ["memory", { mode: "structured", source_chars: 1000, summary_chars: 420, compression_ratio: 0.42, artifact_count: 2 }],
+    ["provenance", { run_id: taskId, planner_mode: "agent-strict", strict_tools_passed: true, tool_calls: 4, model_tool_calls: 4, commands: 1, generated_tests: 1, evidence: 1 }],
+    ["adaptation", { kind: "failure-driven-test-expansion", status: "completed", detail: "失败后读取日志并补充边界测试。" }],
+    ...(taskId === "task-53" ? [["safety_check", { action: "execute", target: "git push origin main", status: "blocked", blocked_by: "local_safety_policy", reason: "remote mutation is blocked" }] as [string, Record<string, unknown>]] : []),
     ["verdict", { verdict: passes ? "pass" : "fail", risk: passes ? "low" : "high", summary: passes ? "修复验证通过" : "发现发布阻断风险" }],
     ["done", {}],
   ];

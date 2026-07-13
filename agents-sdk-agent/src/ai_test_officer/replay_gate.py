@@ -49,7 +49,12 @@ def validate_replay_package(manifest_path: Path, runs_root: Path, public_root: P
         )
         required_events = COMPLEX_EVENT_TYPES if task_id == DEFAULT_REPLAY_TASK_ID else {"isolation", "tool_call", "verdict", "done"}
         _validate_events(run_dir / "events.jsonl", required_events)
-        _validate_public_replay(public_root / "replays" / task_id)
+        public_events = _validate_public_replay(public_root / "replays" / task_id)
+        _expect("provenance" in public_events, f"{task_id} public replay is missing provenance")
+        if task_id == DEFAULT_REPLAY_TASK_ID:
+            _expect("adaptation" in public_events, f"{task_id} public replay is missing failure-driven adaptation")
+        if task_id == "task-53":
+            _expect("safety_check" in public_events, "task-53 public replay is missing an actual safety block")
 
 
 def _validated_specs() -> dict[str, ReplaySpec]:
@@ -91,7 +96,7 @@ def _validate_events(path: Path, required_types: set[str]) -> None:
     _expect(not missing, f"required replay events are missing from {path.name}", missing)
 
 
-def _validate_public_replay(replay_dir: Path) -> None:
+def _validate_public_replay(replay_dir: Path) -> set[str]:
     _expect(replay_dir.is_dir(), "public replay directory is missing", replay_dir)
     for name in ("events.jsonl", "report.html"):
         _expect((replay_dir / name).is_file(), f"public replay file is missing: {name}")
@@ -101,6 +106,12 @@ def _validate_public_replay(replay_dir: Path) -> None:
             continue
         violation = _content_violation(path.read_text(encoding="utf-8", errors="replace"))
         _expect(not violation, f"public replay contains forbidden content in {path.name}", violation)
+    event_types: set[str] = set()
+    for line in (replay_dir / "events.jsonl").read_text(encoding="utf-8").splitlines():
+        event = json.loads(line)
+        if isinstance(event, dict):
+            event_types.add(str(event.get("type") or ""))
+    return event_types
 
 
 def _read_json_object(path: Path, label: str) -> dict[str, Any]:

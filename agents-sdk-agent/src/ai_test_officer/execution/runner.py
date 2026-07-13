@@ -20,10 +20,11 @@ from ..integrations.gongfeng import (
 )
 from ..mcp import read_project_mcp_config
 from ..memory import build_run_memory
-from ..models import RequiredToolCheck, RunRecord
+from ..models import RequiredToolCheck, RunRecord, SafetyCheck
 from ..report import finalize_record, write_outputs
 from ..skill import read_repo_skill
 from ..tools import AgentRunTools, LocalTestTools
+from ..tools.safety import SafetyError
 from ..events import EventSink, RunPhase
 from .planner import generate_temp_tests, plan_test_commands
 from .workspace import create_mr_run_workspace, create_run_workspace
@@ -42,6 +43,7 @@ class RunConfig:
     memory_mode: str = "structured"
     max_agent_turns: int = DEFAULT_AGENT_MAX_TURNS
     mr_checkout_mode: str = "auto"
+    safety_probe: bool = False
 
 
 def run_test_officer(config: RunConfig) -> RunRecord:
@@ -114,6 +116,8 @@ def run_test_officer(config: RunConfig) -> RunRecord:
     )
     record.events.phase(RunPhase.CHECKOUT, "done", detail="隔离工作区已就绪")
     record.events.isolation()
+    if config.safety_probe:
+        _run_safety_probe(record, tools)
 
     if workspace.checkout_status != "ready":
         record.planner_mode = "skipped"
@@ -150,6 +154,8 @@ def run_test_officer(config: RunConfig) -> RunRecord:
     finalize_record(record)
     classify_record_failures(record)
     _validate_agent_strict(config, record)
+    _emit_agent_provenance(record)
+    _emit_adaptation(record)
     record.events.phase(RunPhase.VALIDATING, "done")
 
     record.events.phase(RunPhase.REPORTING, "start")
@@ -170,6 +176,57 @@ def run_test_officer(config: RunConfig) -> RunRecord:
 
 def _agent_summary_enabled() -> bool:
     return os.environ.get("AI_TEST_OFFICER_ENABLE_AGENT_SUMMARY") == "1"
+
+
+def _run_safety_probe(record: RunRecord, tools: LocalTestTools) -> None:
+    command = "git push origin main"
+    try:
+        tools.run_test_command(command)
+    except SafetyError as exc:
+        check = SafetyCheck(
+            name="synthetic_remote_write_probe",
+            action="execute",
+            target=command,
+            status="blocked",
+            blocked_by="local_safety_policy",
+            reason=str(exc),
+        )
+        record.safety_checks.append(check)
+        record.events.safety_check(
+            action=check.action,
+            target=check.target,
+            status=check.status,
+            blocked_by=check.blocked_by,
+            reason=check.reason,
+        )
+        return
+    raise RuntimeError("competition safety probe unexpectedly executed a remote mutation command")
+
+
+def _emit_agent_provenance(record: RunRecord) -> None:
+    record.events.provenance(
+        run_id=record.run_id,
+        planner_mode=record.planner_mode,
+        strict_tools_passed=record.required_tool_check.passed,
+        tool_calls=len(record.agent_turns),
+        model_tool_calls=sum(1 for turn in record.agent_turns if turn.model_initiated),
+        commands=len(record.commands),
+        generated_tests=len(record.generated_files),
+        evidence=len(record.evidence_files),
+    )
+
+
+def _emit_adaptation(record: RunRecord) -> None:
+    observed = [turn.tool for turn in record.agent_turns]
+    if not any(command.returncode != 0 for command in record.commands):
+        return
+    if "read_test_log" not in observed or not record.generated_files:
+        return
+    record.events.adaptation(
+        kind="failure-driven-test-expansion",
+        status="completed",
+        detail="测试失败后读取日志，并补充隔离边界测试继续验证；失败证据保留用于发布决策。",
+    )
 
 
 def _run_planner(config: RunConfig, record: RunRecord, tools: AgentRunTools) -> None:
