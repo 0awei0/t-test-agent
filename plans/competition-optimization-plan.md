@@ -210,7 +210,7 @@ scripts/competition_check.sh
 - `uv lock --check` 已通过。
 - Ruff 已通过。
 - 前端 TypeScript 检查和生产构建已通过。
-- 后端 102 项测试全部通过；前端 4 项 Playwright 比赛 E2E 全部通过。
+- 后端 103 项测试全部通过；前端 4 项 Playwright 比赛 E2E 全部通过。
 - Agents SDK 迁移、8 回放门禁、浏览器 E2E、回放控制、运行来源和安全拦截均已提交并推送 `origin/main`。
 - 完整门禁已验证 8 个 TAPD/MR 一一对应回放、严格工具契约、公开包脱敏和移动端布局。
 - README、Repo Skill、展示文档和脚本已统一使用 `release-guard` 主演示、`agent-loop` 快速兜底、EdgeOne 正式提交和 FUE 备用分享口径。
