@@ -471,10 +471,20 @@ def _safe_package_name(value: str) -> str:
 
 
 def _fue_deploy_doc(*, project_slug: str, project_name: str) -> str:
-    return f"""# FUE 部署文档（AI Test Officer 报告 + 实时仪表盘回放）
+    return f"""# 静态报告部署文档（EdgeOne Makers + FUE 备用）
 
 本目录是通过 `ai-test-officer report export-fue` 生成的**静态 Web 应用**，用于把一次
 AI 测试官的运行结果（含实时执行仪表盘回放页）部署到 FUE 静态托管，方便评审/分享。
+
+比赛正式入口使用 EdgeOne Makers。必须从 `public/` 目录执行部署，确保报告位于站点根路径：
+
+```bash
+cd public
+PAGES_SOURCE=skills edgeone makers deploy -n {project_slug} --json
+```
+
+不要从导出包根目录部署，否则报告会落到 `/public/`，站点根路径将返回 404。FUE 仅作为
+内部分享或备用入口。
 
 > 安全提醒：不要把业务报告原文、截图、运行日志提交进 Git 仓库。`public/` 里只放脱敏后的
 > `public-run.json` 和 `report.md`；完整的本地 `run.json`、日志、本地绝对路径**不会**被导出。
@@ -596,9 +606,9 @@ fue deploy --cwd . --default
 快速预览命令（部署前本地自查）：
 
 ```bash
-cd public/dashboard
-python -m http.server 8080
-# 浏览器打开 http://127.0.0.1:8080/?mode=static
+cd public
+PAGES_SOURCE=skills edgeone makers dev --name {project_slug} --skip-env-sync
+# 浏览器打开 EdgeOne CLI 输出的 HTTP 地址，再访问 /dashboard/?mode=static
 ```
 
 ---

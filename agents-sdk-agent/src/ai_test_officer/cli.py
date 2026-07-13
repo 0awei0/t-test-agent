@@ -614,7 +614,11 @@ def _report_export_fue_from_args(args: argparse.Namespace) -> None:
     print(f"Index: {exported.index_path}")
     print(f"Config: {exported.config_path}")
     print(f"Deploy doc: {exported.deploy_doc_path}")
-    print(f"Deploy: fue deploy --cwd {exported.project_root} --default")
+    print(
+        "Deploy to EdgeOne Makers: "
+        f"cd {exported.public_dir} && PAGES_SOURCE=skills "
+        f"edgeone makers deploy -n {args.project_slug} --json"
+    )
 
 
 def _batch_mr_from_args(args: argparse.Namespace) -> None:

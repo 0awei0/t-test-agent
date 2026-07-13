@@ -187,10 +187,21 @@ def run_agent_planner(
     write_temp_test_tool_kwargs = (
         {"tool_input_guardrails": [safe_temp_test_write]} if safe_temp_test_write is not None else {}
     )
+    unread_failure_logs: set[int] = set()
 
     @function_tool(strict_mode=False, **run_test_command_tool_kwargs)
     def run_test_command(command: str) -> str:
         """Run a whitelisted test command in the isolated workspace repo."""
+        if unread_failure_logs:
+            command_id = min(unread_failure_logs)
+            return json.dumps(
+                {
+                    "command": command,
+                    "error": "read the previous failed command log before running another test",
+                    "next_required_tool": f"read_test_log({command_id})",
+                },
+                ensure_ascii=False,
+            )
         cid = f"c{len(record.commands) + 1}"
         if sink is not None:
             sink.command(cid, command, "start", category="agent")
@@ -232,6 +243,8 @@ def run_agent_planner(
             },
             ensure_ascii=False,
         )
+        if result.returncode != 0:
+            unread_failure_logs.add(len(record.commands))
         if sink is not None:
             sink.command(
                 cid,
@@ -252,6 +265,8 @@ def run_agent_planner(
         except Exception as exc:
             record.planner_trace.append(f"tool-error:read_test_log:{exc}")
             output = f"error: {exc}"
+        else:
+            unread_failure_logs.discard(command_id)
         trace(f"read_test_log:{command_id}", str(command_id), output)
         return output
 

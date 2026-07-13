@@ -81,8 +81,64 @@ class AgentPlannerTests(unittest.TestCase):
         )
         self.assertEqual(record.commands[0].returncode, 0)
 
+    def test_failed_log_must_be_read_before_another_test_command(self) -> None:
+        observed: dict[str, str] = {}
 
-def _fake_agents_modules():
+        def exercise_tools(agent, prompt, max_turns=12, hooks=None, **kwargs):
+            first = agent.tools[5]("python -m unittest tests.test_one -v")
+            observed["blocked"] = agent.tools[5]("python -m unittest tests.test_two -v")
+            agent.tools[6](1)
+            observed["after_read"] = agent.tools[5]("python -m unittest tests.test_two -v")
+            return types.SimpleNamespace(final_output=first)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            context = root / "context"
+            logs = root / "logs"
+            repo.mkdir()
+            context.mkdir()
+            logs.mkdir()
+            (context / "diff-index.json").write_text("[]", encoding="utf-8")
+            record = RunRecord(
+                run_id="agent-failure-log",
+                task="Analyze",
+                source_repo=repo,
+                workspace_repo=repo,
+                run_dir=root,
+                git_range="base..head",
+                changed_files=[],
+                diff_text="",
+                allow_temp_test_code=False,
+                context_dir=context,
+            )
+            tools = AgentRunTools(
+                LocalTestTools(repo, logs, allow_temp_test_code=False),
+                [],
+                context,
+                record.commands,
+                record.generated_files,
+            )
+
+            def fail(command: str) -> CommandResult:
+                log_path = logs / f"command-{len(record.commands) + 1:02d}.log"
+                log_path.write_text("failure details", encoding="utf-8")
+                return CommandResult(command, 1, "", "failure", log_path)
+
+            tools.local.run_test_command = fail  # type: ignore[method-assign]
+            with _fake_agents_modules(exercise_tools), patch.dict(
+                os.environ,
+                {"ARK_API_KEY": "ark", "AI_TEST_OFFICER_MODEL": "doubao-test"},
+                clear=True,
+            ):
+                run_agent_planner(record, tools, fallback_to_deterministic=False, max_turns=21)
+
+        self.assertIn("read_test_log(1)", observed["blocked"])
+        self.assertNotIn("previous failed command log", observed["after_read"])
+        self.assertEqual(len(record.commands), 2)
+
+
+def _fake_agents_modules(run_sync_override=None):
     class FakeAgent:
         def __init__(self, *, name, instructions, model, tools):
             self.name = name
@@ -93,6 +149,8 @@ def _fake_agents_modules():
     class FakeRunner:
         @staticmethod
         def run_sync(agent, prompt, max_turns=12, hooks=None, **kwargs):
+            if run_sync_override is not None:
+                return run_sync_override(agent, prompt, max_turns=max_turns, hooks=hooks, **kwargs)
             assert max_turns == 21
             agent.tools[0]()
             agent.tools[1]("tests/test_ok.py")
