@@ -457,10 +457,29 @@ Do not add `TAI_PAT_TOKEN`, TAPD tokens, or iWiki endpoints to `.env` or
 
 ## Verification
 
+Run the complete competition release gate:
+
+```bash
+scripts/competition_check.sh
+```
+
+To include the configured model-backed `agent-strict` tool-loop contract:
+
+```bash
+AI_TEST_OFFICER_REQUIRE_AGENT=1 scripts/competition_check.sh
+```
+
+The gate creates a unique ignored directory under `runs/competition-check/` on
+every invocation, so repeated rehearsals never overwrite earlier evidence.
+
+Individual checks remain available:
+
 ```bash
 uv lock --check
 uv run ruff check .
 uv run python -m unittest discover -s agents-sdk-agent/tests -p 'test_*.py' -v
+npm --prefix frontend run typecheck
+npm --prefix frontend run build
 ```
 
 Do not commit `runs/`, `.env`, `.mcp.json`, generated reports, real business

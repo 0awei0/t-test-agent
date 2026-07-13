@@ -108,15 +108,15 @@ git status --short
 优先级：P0
 预计时间：1 天
 
-- [ ] 新增 `scripts/competition_check.sh`。
-- [ ] 检查 uv 版本、lock、Ruff、后端测试和前端构建。
-- [ ] 验证 `release-guard` 必须得到 `fail/high`。
-- [ ] 验证 `release-guard-pass` 必须得到 `pass/low`。
-- [ ] 验证 `agent-loop` 的关键多轮工具调用。
-- [ ] 导出公开静态包并执行 `demo doctor`。
-- [ ] 检查截图、报告和事件流存在且非空。
-- [ ] 检查公开包不存在密钥、绝对路径、原始日志和完整 `run.json`。
-- [ ] 为脚本增加明确的阶段输出、失败原因和非零退出码。
+- [x] 新增 `scripts/competition_check.sh`。
+- [x] 检查 uv 版本、lock、Ruff、后端测试和前端构建。
+- [x] 验证 `release-guard` 必须得到 `fail/high`。
+- [x] 验证 `release-guard-pass` 必须得到 `pass/low`。
+- [x] 验证 `agent-loop` 的关键多轮工具调用。
+- [x] 导出公开静态包并执行 `demo doctor`。
+- [x] 检查截图、报告和事件流存在且非空。
+- [x] 检查公开包不存在密钥、绝对路径、原始日志和完整 `run.json`。
+- [x] 为脚本增加明确的阶段输出、失败原因和非零退出码。
 
 #### 验收标准
 

@@ -39,6 +39,7 @@ def run_demo_doctor(
     fue_public: Path | None = None,
     detail_url: str | None = None,
     require_detail_url: bool = False,
+    require_evidence: bool = False,
 ) -> DemoDoctorResult:
     checks = [
         _model_check(),
@@ -46,7 +47,12 @@ def run_demo_doctor(
         _detail_url_check(detail_url, require_detail_url=require_detail_url),
     ]
     if fue_public:
-        checks.extend(_fue_public_checks(fue_public.expanduser().resolve()))
+        checks.extend(
+            _fue_public_checks(
+                fue_public.expanduser().resolve(),
+                require_evidence=require_evidence,
+            )
+        )
     else:
         checks.append(DoctorCheck("fue_public", "warn", "not provided; skipping FUE package checks"))
     return DemoDoctorResult(checks)
@@ -73,7 +79,7 @@ def _detail_url_check(detail_url: str | None, *, require_detail_url: bool) -> Do
     return DoctorCheck("detail_url", "warn", "not provided; use --detail-url after FUE deploy")
 
 
-def _fue_public_checks(public_dir: Path) -> list[DoctorCheck]:
+def _fue_public_checks(public_dir: Path, *, require_evidence: bool) -> list[DoctorCheck]:
     checks: list[DoctorCheck] = []
     if not public_dir.exists() or not public_dir.is_dir():
         return [DoctorCheck("fue_public", "fail", f"directory not found: {public_dir}")]
@@ -92,7 +98,21 @@ def _fue_public_checks(public_dir: Path) -> list[DoctorCheck]:
 
     checks.append(_public_run_json_check(public_dir / "public-run.json"))
     checks.append(_public_content_scan(public_dir))
+    checks.append(_evidence_check(public_dir, required=require_evidence))
     return checks
+
+
+def _evidence_check(public_dir: Path, *, required: bool) -> DoctorCheck:
+    evidence = [
+        path
+        for path in public_dir.rglob("*")
+        if path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
+    ]
+    if evidence:
+        return DoctorCheck("public_evidence", "pass", f"found {len(evidence)} image evidence file(s)")
+    if required:
+        return DoctorCheck("public_evidence", "fail", "required image evidence is missing")
+    return DoctorCheck("public_evidence", "warn", "no image evidence found")
 
 
 def _public_run_json_check(path: Path) -> DoctorCheck:

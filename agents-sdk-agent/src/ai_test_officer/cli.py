@@ -132,6 +132,11 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Fail when --detail-url is missing or not clickable.",
     )
+    demo_doctor.add_argument(
+        "--require-evidence",
+        action="store_true",
+        help="Fail when the public package has no image evidence.",
+    )
     demo_doctor.add_argument("--env", default=".env", help="Local env file to load before checking.")
 
     demo_run = demo_subparsers.add_parser("run", help="Run a synthetic demo through AI Test Officer.")
@@ -381,6 +386,7 @@ def _demo_doctor_from_args(args: argparse.Namespace) -> None:
         fue_public=Path(args.fue_public) if args.fue_public else None,
         detail_url=args.detail_url,
         require_detail_url=args.require_detail_url,
+        require_evidence=args.require_evidence,
     )
     print(result.to_text())
     if not result.passed:
