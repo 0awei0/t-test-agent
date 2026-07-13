@@ -10,7 +10,7 @@
 ## Environment
 
 - Use `uv` for environment and dependency management.
-- Run `uv sync --extra codex --group dev` after dependency changes.
+- Run `uv sync --locked --group dev` after Python dependency changes.
 - Keep `uv.lock` committed whenever dependency metadata changes.
 - Use `uv run ...` for local commands instead of activating `.venv` manually.
 
@@ -18,7 +18,8 @@
 
 - Run `uv lock --check` after dependency metadata changes.
 - Run `uv run ruff check .` before committing code.
-- Run `uv run python -m unittest discover -s tests -p 'test_*.py' -v` before committing code.
+- Run `uv run python -m unittest discover -s agents-sdk-agent/tests -p 'test_*.py' -v` before committing code.
+- Run `npm --prefix frontend run typecheck` and `npm --prefix frontend run build` after frontend changes.
 
 ## GitHub Sync
 

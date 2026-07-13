@@ -132,27 +132,27 @@ core.*
 
 ### 1B：迁移完整性
 
-- [ ] 生成旧根实现与 Agents SDK 实现的模块映射。
-- [ ] 核对所有旧 CLI 能力的去留。
-- [ ] 查找新实现中的重复模块和未引用模块。
-- [ ] 确认 `codex-agent/` 不被包发现、CI 或默认命令加载。
-- [ ] 确认所有活动文档只引用新入口。
+- [x] 生成旧根实现与 Agents SDK 实现的模块映射。
+- [x] 核对所有旧 CLI 能力的去留。
+- [x] 查找新实现中的重复模块和兼容转发模块。
+- [x] 确认 `codex-agent/` 只保留 Git 历史指针，不被包发现、CI 或默认命令加载。
+- [x] 确认活动文档使用 Agents SDK 新入口；真实 MR 改用通用只读入口。
 
 ### 1C：依赖与干净环境
 
-- [ ] 检查 `pyproject.toml` 与 `uv.lock` 一致。
-- [ ] 检查前端 `package.json` 与 `package-lock.json` 一致。
-- [ ] 从独立临时 clone/worktree 执行安装。
-- [ ] 执行 Python、前端和 CLI smoke 验证。
-- [ ] 检查验证过程没有修改源工作区。
+- [x] 检查 `pyproject.toml` 与 `uv.lock` 一致。
+- [x] 检查前端 `package.json` 与 `package-lock.json` 一致。
+- [x] 从独立索引快照执行干净安装。
+- [x] 执行 Python、前端和 CLI smoke 验证。
+- [x] 检查验证过程没有修改源工作区。
 
 ### 1D：提交边界
 
-- [ ] 审查最终 `git diff --stat`。
-- [ ] 审查最终 `git diff --check`。
-- [ ] 审查所有新增大文件。
-- [ ] 确认不存在生成报告、截图、日志和真实 diff。
-- [ ] 相关测试全部通过后提交。
+- [x] 审查最终 `git diff --stat`。
+- [x] 审查最终 `git diff --check`。
+- [x] 审查所有新增大文件。
+- [x] 确认不存在生成报告、截图、日志和真实 diff。
+- [x] 相关测试全部通过后提交。
 - [ ] 按仓库要求推送 `origin/main`。
 
 ## 6. 阶段完成定义
@@ -180,3 +180,13 @@ core.*
 - `git check-ignore -v` 已确认 core dump、`frontend/node_modules`、`frontend/dist`、`.fue`、`.playwright-mcp`、`runs/*` 和 `reports/*` 命中预期规则。
 - 本批次秘密模式扫描无命中。
 - `uv lock --check` 和 `uv run ruff check .` 通过。
+
+### 2026-07-13：1B/1C Agents SDK 迁移收口
+
+- 活动实现已统一到 `agents-sdk-agent/`；旧 Codex SDK 完整实现保留在 Git 历史 `802cac9`，当前树只保留归档指针。
+- 移除仓库内置真实 MR 案例、真实服务名、个人 workspace 默认路径和个人环境标识；通用 `run --mr-url`、`batch mr` 能力保留。
+- JavaScript 测试规划改为从最近的 `package.json` 通用发现测试脚本。
+- 修复公开导出对预先存在 `frontend/dist` 的隐式依赖；未构建前端时生成最小安全回放页。
+- Vite 升级到 `8.1.4`，`@vitejs/plugin-react` 升级到 `6.0.3`，`npm audit` 为 0。
+- 主工作区和独立索引快照均通过 83 个后端测试、Ruff、lock 检查、CLI smoke、前端 typecheck/build 和依赖审计。
+- 批次零本地提交为 `e64485d`；GitHub HTTPS 凭据缺失，推送待统一重试。

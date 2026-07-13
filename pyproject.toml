@@ -5,18 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "t-test-agent"
 version = "0.1.0"
-description = "AI Test Officer MVP powered by the Codex Python SDK."
+description = "AI Test Officer MVP powered by the OpenAI Agents SDK."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "0awei0" }]
-dependencies = []
+dependencies = ["openai-agents"]
 
 [project.optional-dependencies]
-codex = [
-    # 0.1.0b2 pins openai-codex-cli-bin==0.132.0, which has no manylinux
-    # wheel. 0.1.0b3 pins a Linux-compatible CLI binary.
-    "openai-codex==0.1.0b3",
-]
 e2e = ["playwright>=1.53"]
 
 [dependency-groups]
@@ -26,7 +21,10 @@ dev = ["ruff>=0.8.0"]
 ai-test-officer = "ai_test_officer.cli:main"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["agents-sdk-agent/src"]
+
+[tool.setuptools.package-data]
+"ai_test_officer.prompts" = ["*.md"]
 
 [tool.ruff]
 line-length = 100

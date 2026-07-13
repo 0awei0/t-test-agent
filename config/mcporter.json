@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "tapd": {
+      "baseUrl": "https://mcpgw.knot.woa.com/tapd/"
+    },
+    "iwiki": {
+      "baseUrl": "https://prod.mcp.it.woa.com/app_iwiki_mcp/mcp3"
+    }
+  }
+}

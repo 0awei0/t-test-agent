@@ -48,17 +48,18 @@
 
 #### 工作项
 
-- [ ] 盘点当前 tracked、deleted、untracked 文件，形成保留、归档、忽略、删除四类清单。
-- [ ] 确认 `agents-sdk-agent/` 是唯一活动后端实现。
-- [ ] 确认 `codex-agent/` 仅作为归档，不参与安装、测试和 CI。
-- [ ] 确认旧根目录 `src/`、`tests/`、旧脚本和旧文档的迁移去向。
+- [x] 盘点当前 tracked、deleted、untracked 文件，形成保留、归档、忽略、删除四类清单。
+- [x] 确认 `agents-sdk-agent/` 是唯一活动后端实现。
+- [x] 确认 `codex-agent/` 仅保留 Git 历史指针，不参与安装、测试和 CI。
+- [x] 确认旧根目录 `src/`、`tests/`、旧脚本和旧文档的迁移去向。
 - [x] 完善 `.gitignore`，排除密钥、运行产物、依赖、构建结果、日志、截图和 core dump。
 - [x] 修复 `.gitignore` 尾随空格和重复规则。
 - [x] 确认 `reports/`、`runs/` 默认只保留 `.gitkeep`。
-- [ ] 确认 CI 使用当前 Agents SDK 测试目录。
-- [ ] 检查 `pyproject.toml`、`uv.lock` 和实际包目录一致。
-- [ ] 从干净 checkout 验证安装、测试、构建和 CLI 入口。
-- [ ] 通过验证后形成一次完整迁移提交并推送 `origin/main`。
+- [x] 确认 CI 使用当前 Agents SDK 测试目录。
+- [x] 检查 `pyproject.toml`、`uv.lock` 和实际包目录一致。
+- [x] 从干净索引快照验证安装、测试、构建和 CLI 入口。
+- [x] 通过验证后形成一次完整迁移提交。
+- [ ] 推送迁移提交到 `origin/main`（当前环境缺少 GitHub HTTPS 凭据）。
 
 #### 禁止事项
 

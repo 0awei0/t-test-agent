@@ -2,219 +2,466 @@
 
 AI Test Officer MVP for the hackathon direction `AI 测试官`.
 
-Competition target: build an Agent that completes the loop
-`understand change -> plan test strategy -> execute validation -> write a decision-ready report`,
-covering backend logic and, later, frontend experience. The detailed requirement
-breakdown lives in [docs/competition-requirements.md](docs/competition-requirements.md).
+This version is rebuilt around the OpenAI Agents SDK. The older Codex SDK
+implementation is archived under `codex-agent/` for reference only.
 
-The first version keeps the product thin and lets Codex do the heavy lifting:
+## Project Layout
 
-- read code / requirements / diffs,
-- infer risk and test scope,
-- plan useful checks,
-- run validation through the local Codex runtime,
-- write a decision-ready Markdown report.
+- `agents-sdk-agent/`: current implementation and tests.
+  - `src/ai_test_officer/agent/`: model provider setup, Agents SDK summaries, tool-call smoke tests.
+  - `src/ai_test_officer/context/`: MR/diff indexing and structured context summaries.
+  - `src/ai_test_officer/prompts/`: Markdown prompts used by Agents SDK components.
+  - `src/ai_test_officer/tools/`: safe local tools, read-only git helpers, command/write guards.
+  - `src/ai_test_officer/execution/`: isolated run workspace creation, planning, and test execution.
+  - `src/ai_test_officer/memory/`: local prompt/context compaction and run-memory shaping.
+  - `src/ai_test_officer/skill/`: repo skill instruction loading.
+  - `src/ai_test_officer/mcp/`: project MCP configuration loading.
+  - `src/ai_test_officer/integrations/`: outbound integrations such as WeCom.
+- `codex-agent/`: archived Codex SDK implementation.
+- `frontend/`: React + Vite live dashboard. Built output lands in `frontend/dist/`
+  and is served by the live server or bundled into the FUE export as a replay page.
+- `runs/`: local ignored run workspaces, generated test code, logs, evidence, and reports.
+- `.codex/`: project MCP configuration template for non-internal tools.
+- `config/mcporter.json`: on-demand internal-platform endpoints for `mcporter-internal`.
+- `docs/部署.md`: EdgeOne Makers competition deployment and submission guide.
+- `docs/复现说明.md`: simulated TAPD/MR cases, local test execution, and export reproduction guide.
+- `.agents/`: repo-level skill instructions for Codex users.
 
-## Tech Stack
+## Safety Model
 
-- Python: `3.12`, pinned in `.python-version`.
-- Package and environment manager: `uv 0.11.25`.
-- Backend: Python first. The MVP exposes a CLI and report generator before adding service APIs.
-- Frontend: deferred. A lightweight report UI is useful for the final competition demo, but it is not required for the first backend MVP.
+The original business repository is read-only. Each run creates an isolated
+workspace under `runs/<run-id>/repo/`, applies the requested git range there,
+and writes all generated tests, logs, screenshots, reports, and JSON metadata
+under the same `runs/<run-id>/` directory.
+
+The tool layer rejects remote or branch-mutating operations such as `git push`,
+`git commit`, `git merge`, `git reset`, deployment commands, and arbitrary shell
+commands. Temporary test code is disabled by default and can only be written
+inside the isolated run workspace when `--allow-temp-test-code` is passed.
 
 ## Setup
 
-```powershell
-winget install --id astral-sh.uv -e
-uv sync --extra codex --group dev
+```bash
+uv sync --locked --group dev
 ```
 
-This project uses `uv` for Python version, virtual environment, dependency, and lockfile management.
-The `codex` extra installs the official Python package `openai-codex`, which controls the local Codex app-server.
+Model-backed summaries are optional. Without a model key the runner still clones
+the repo, creates temporary tests when allowed, runs local commands, and writes
+reports. To use Doubao through the OpenAI-compatible Ark endpoint, put this in
+local `.env`:
 
-For company-internal runs, copy `.env.example` to `.env` and fill local tokens.
-The project-level Codex MCP template lives in `.codex/config.toml`; it references
-environment variables only and does not contain secrets.
-
-## Usage
-
-Preview the prompt without calling Codex:
-
-```powershell
-uv run ai-test-officer prompt --task "Review this repo and propose the first MVP test plan."
+```bash
+ARK_API_KEY=<your-ark-key>
+AI_TEST_OFFICER_MODEL=doubao-seed-2-1-turbo-260628
+AI_TEST_OFFICER_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+AI_TEST_OFFICER_OPENAI_API=chat_completions
+AI_TEST_OFFICER_DISABLE_TRACING=true
 ```
 
-Generate a dry-run report:
+For WeCom outbound summaries, keep one of these in local `.env`:
 
-```powershell
-uv run ai-test-officer run --task "Review this repo and propose the first MVP test plan." --dry-run
+```bash
+WECOM_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>
+# or
+WECOM_WEBHOOK_KEY=<key>
 ```
 
-Check internal integrations without printing secrets:
+For Playwright evidence later:
 
-```powershell
-uv run ai-test-officer doctor
-```
-
-Simulate a WeCom bot notification without sending:
-
-```powershell
-uv run ai-test-officer notify --message "AI Test Officer notify smoke" --dry-run
-```
-
-Create and run the synthetic A/B/C competition demos:
-
-```powershell
-uv run ai-test-officer scenario create --scenario all --demo-root /tmp/ai-test-officer-scenarios
-uv run ai-test-officer scenario run --scenario A --demo-root /tmp/ai-test-officer-scenarios --dry-run
-uv run ai-test-officer scenario run --scenario A-fullstack --demo-root /tmp/ai-test-officer-scenarios --dry-run --visualize
-uv run ai-test-officer scenario run --scenario B --demo-root /tmp/ai-test-officer-scenarios --dry-run
-uv run ai-test-officer scenario run --scenario C --demo-root /tmp/ai-test-officer-scenarios --dry-run
-```
-
-For the full-chain browser demo, install the optional Playwright extra and Chromium:
-
-```powershell
-uv sync --extra codex --extra e2e --group dev
+```bash
+uv sync --locked --extra e2e --group dev
 uv run python -m playwright install chromium
 ```
 
-The synthetic fullstack repo also works as a standalone demo because its browser
-test command uses `uv run --with playwright ...`.
+## Usage
 
-Send a report to a WeCom group bot after setting `WECOM_WEBHOOK_KEY` in local
-`.env` or the full `WECOM_WEBHOOK_URL`:
+## Competition Showcase
 
-```powershell
-uv run ai-test-officer notify --report reports/latest-report.md --message "场景A测试报告"
+比赛现场优先使用 `release-guard` 合成场景：一次大促订单变更会同时触发优惠策略、支付幂等和库存风险，Agent 需要读取 diff、自主规划单测/API/浏览器验证、保留截图证据并给出发布建议。
+它不依赖真实业务环境；`agent-loop` 保留为 30 秒稳定兜底，真实 MR 结果仅作为备选材料。
+
+另外提供两个需要 Agent 多轮定位的合成 case：
+
+```bash
+# 首个失败是优惠策略，Agent 还需补支付重试重复扣库存测试。
+uv run ai-test-officer demo run --scenario promotion-chain --planner-mode agent-strict --allow-temp-test-code
+
+# 首个失败是退款越权，Agent 还需补 shipped 状态退款测试。
+uv run ai-test-officer demo run --scenario refund-guard --planner-mode agent-strict --allow-temp-test-code
 ```
 
-The scenario runner can also push the generated report summary:
+比赛入口填写的 TAPD/MR 链接均为模拟数据；真实只读接入与安全边界见 [`docs/比赛展示说明.md`](docs/比赛展示说明.md)。
 
-```powershell
-uv run ai-test-officer scenario run --scenario A --demo-root /tmp/ai-test-officer-scenarios --send
+推荐先跑一键彩排脚本：
+
+```bash
+scripts/showcase_release_guard.sh
 ```
 
-Generate the static visual report used for the competition demo:
+脚本会生成报告、导出 FUE 静态包，并运行 `demo doctor` 检查公开包是否脱敏。
 
-```powershell
-uv run ai-test-officer scenario create --scenario A-fullstack --demo-root /tmp/ai-test-officer-scenarios
-uv run ai-test-officer scenario run --scenario A-fullstack --demo-root /tmp/ai-test-officer-scenarios --visualize
+也可以手动执行：
+
+```bash
+uv run ai-test-officer demo showcase \
+  --scenario release-guard \
+  --demo-root runs/demos \
+  --runs-root runs/showcase \
+  --planner-mode agent-strict \
+  --run-id release-guard-showcase \
+  --export-fue runs/edgeone-site/release-guard-showcase \
+  --notify-dry-run
 ```
 
-Run scenario A against the last local commit:
+检查导出的 FUE public 目录：
 
-```powershell
-uv run ai-test-officer run --repo . --last-commit --task "场景A：分析刚提交的改动并跑针对性测试"
+```bash
+uv run ai-test-officer demo doctor \
+  --fue-public runs/edgeone-site/release-guard-showcase/public
 ```
 
-Run scenario A against a specific local git range:
+这条命令会生成报告并导出可部署的静态包。**比赛展示和对外交付默认使用 EdgeOne Makers**：
+按 [`docs/部署.md`](docs/部署.md) 完成部署、获取预览链接，再前往[大赛官网](https://portal.learn.woa.com/pages/activityLaodingPage/index.html?scheme_type=aiBlock&from=xx#topics)提交作品；只有官网已上传作品链接才算成功参赛。之后可继续迭代作品，建议尽早提交 Demo 或说明文档，以参与早鸟激励等活动。
 
-```powershell
-uv run ai-test-officer run --repo . --git-range "main..HEAD" --task "场景A：分析这个分支改动并跑针对性测试"
+拿到 EdgeOne 预览链接后，再用该链接发企微摘要：
+
+FUE `public/` 中只包含可分享的 `index.html`、`report.md`、脱敏 `public-run.json`
+和证据文件；完整 `run.json`、日志和本地绝对路径继续只留在 `runs/<run-id>/`。
+
+```bash
+uv run ai-test-officer demo showcase \
+  --scenario agent-loop \
+  --demo-root runs/demos \
+  --runs-root runs/showcase \
+  --planner-mode agent-strict \
+  --run-id agent-loop-showcase \
+  --export-fue runs/fue-site/agent-loop-showcase \
+  --detail-url https://<your-fue-domain>/index.html \
+  --send
 ```
 
-Run through the Codex Python SDK:
+企微手机端优先点击 FUE 链接。开发机 `http://<host>:8788` 只用于本地调试，
+不建议作为现场或手机端最终链接。
 
-```powershell
-uv run ai-test-officer run --task "Analyze the latest changes, run safe checks, and produce a test report."
+真实 MR 验证使用通用的 `run --mr-url` 或 `batch mr` 入口。真实 URL、diff、日志和报告
+只保存在本地忽略目录，不作为仓库内置案例提交。运行过程只在 `runs/` 隔离副本中测试，
+不会评论 MR、push、checkout 原始业务仓库或部署环境。
+
+无模型彩排时可以把 `--planner-mode agent-strict` 换成
+`--planner-mode deterministic`，用于检查 HTML/FUE/企微格式；正式演示应使用
+`agent-strict`，这样报告会展示 Agent 多轮工具调用和关键工具检查。
+
+Create and run the synthetic fullstack demo first. This is the most stable way
+to show the full testing loop: code diff analysis, temporary tests, API checks,
+browser evidence when Playwright is installed, and an HTML report.
+
+```bash
+uv run ai-test-officer demo create \
+  --scenario fullstack \
+  --demo-root runs/demos
+
+uv run ai-test-officer demo run \
+  --scenario fullstack \
+  --demo-root runs/demos \
+  --planner-mode agent \
+  --allow-temp-test-code
 ```
 
-Codex SDK runs use ephemeral threads by default, so they should not stay in the
-Codex sidebar. When debugging and intentionally keeping the thread, pass
-`--save-thread`.
+The demo intentionally introduces a checkout discount bug in the last commit.
+Without Playwright installed, the browser test is skipped with a clear
+dependency message while unit/API tests still expose the regression. With
+Playwright installed, the browser test saves screenshot evidence under the run
+workspace.
 
-Reports are written to `reports/latest-report.md` by default. Each run also
-writes a JSON sidecar next to the report. Render it as a static HTML page with:
+本地调试时，也可以把 HTML 发布到开发机静态服务并发企微链接：
 
-```powershell
-uv run ai-test-officer visualize --report reports/latest-report.md
+```bash
+uv run ai-test-officer report serve \
+  --root runs/report-site \
+  --host 0.0.0.0 \
+  --port 8788
+
+uv run ai-test-officer demo run \
+  --scenario fullstack \
+  --demo-root runs/demos \
+  --planner-mode agent \
+  --allow-temp-test-code \
+  --publish \
+  --site-root runs/report-site \
+  --report-base-url http://<internal-host>:8788 \
+  --send
 ```
 
-## Scenario A Demo
+这个方式依赖开发机网络可达性；如果企微手机端打不开，改用 FUE。
 
-Create synthetic demo repositories:
+### 可选：FUE 静态托管
 
-```powershell
-uv run python scripts/create_scenario_demos.py
+FUE 静态托管可用于内部分享。它把一次运行的报告 + 实时执行仪表盘回放页
+（`public/dashboard/`）打包成静态 Web 应用。完整、带排错步骤的部署说明会随每次导出
+自动生成在 `runs/fue-site/<run-id>/FUE_DEPLOY.md`，**部署前请先读它**。下面是与该文档
+对齐的精简步骤。
+
+### 前置条件
+
+- Node.js ≥ 18 + npm（用于 FUE CLI）。
+- 能访问 FUE 内网并有 FUE 账号；安装并登录 CLI：
+  ```bash
+  npm i -g @tencent/fue-cli
+  fue login
+  fue whoami
+  ```
+- 仪表盘需要前端先构建（否则导出包不含 `public/dashboard/`）：
+  ```bash
+  cd frontend && npm install && npm run build && cd ..
+  ```
+
+### 1) 导出 FUE 包
+
+```bash
+uv run ai-test-officer report export-fue \
+  --report runs/<run-id>/report.md \
+  --output runs/fue-site/<run-id> \
+  --project-slug ai-test-officer-report
 ```
 
-Or create only the scenario A repository with a baseline commit followed by a
-buggy checkout change:
+导出后确认 `runs/fue-site/<run-id>/public/dashboard/events.jsonl` 存在且非空。
 
-```powershell
-uv run python scripts/create_scenario_a_demo.py
+### 2) 部署（任选其一）
+
+**控制台（UI）**：在 FUE 新建静态 Web 应用，关联 `runs/fue-site/<run-id>/` 目录，
+配置按下面填写后部署：
+
+- 工程类型: 静态Web应用
+- 框架预设: Other
+- 部署方式: 静态托管 (COS + CDN)
+- **Static Directory: `public`**
+- 访问路径: `/`
+
+**CLI**：
+
+```bash
+cd runs/fue-site/<run-id>
+fue project create     # 已有项目用 fuse link
+fue deploy --cwd . --default
 ```
 
-The script prints the generated repository path and ready-to-run `scenario`
-commands:
+### 3) 访问
 
-```powershell
-uv run ai-test-officer scenario run --scenario A --demo-root <demo-root> --dry-run
+部署后 FUE 分配 `https://<标识>.fue.woa.com/`：
+
+- 主报告页：`/`
+- 实时仪表盘回放页：`/dashboard/?mode=static`（无需后端，读取同目录 `events.jsonl` 还原全过程）
+
+部署成功后把该地址作为 showcase 通知的 `--detail-url`。
+
+For internal FUE sharing, the test environment default `*.fue.woa.com` HTTPS
+domain is enough. Competition delivery should use EdgeOne Makers and then be
+submitted through the competition website; custom domain, DNS/CNAME, and
+certificate work are only needed for a formal business domain.
+
+## 实时执行仪表盘（可视化）
+
+比赛方向要求「用图形化界面或实时展示方式呈现测试过程与结果」。本项目的
+`agent-sdk-agent` 在每次运行时把结构化事件追加写入 `runs/<run-id>/events.jsonl`
+（阶段进度、工具调用、命令执行、证据、最终结论），并用一个 React 仪表盘实时渲染：
+
+- 阶段进度条（准备→规划→执行→校验→报告）
+- 工具调用时间线（实时 spinner / ✓ / ✗，淡入滚动）
+- 策略形成面板（为什么测这些）
+- 执行状态与实时风险/结论
+- 失败定位（命令/工具失败时红框高亮 + 自动滚动 + 日志/证据链接）
+- 证据网格（截图/日志实时涌入）
+- 结束后展示大结论徽章并提供完整报告链接
+
+### 开发机实时直播
+
+```bash
+# 运行并同时打开实时仪表盘（默认 http://127.0.0.1:8789/?run_id=<id>）
+uv run ai-test-officer demo run \
+  --scenario fullstack \
+  --demo-root runs/demos \
+  --planner-mode agent \
+  --allow-temp-test-code \
+  --visualize
+
+# 或对一个已完成的 run 启动仪表盘用于回放
+uv run ai-test-officer report serve --live --run-id <id>
 ```
 
-The demo uses Python `unittest` and intentionally breaks an existing boundary
-test so the report can explain the changed file, risk, failing validation, and
-recommended fix.
+### 构建前端（部署 / FUE 前必做）
+
+后端保持标准库（`http.server`），仅前端引入 React/Vite。`ruff` 不覆盖 `frontend/`，
+需要先手动构建：
+
+```bash
+cd frontend
+npm install
+npm run build      # 产物输出到 frontend/dist/
+npm run typecheck  # 可选：类型检查
+```
+
+未构建时，`--visualize` 打开的页面会提示「前端未构建」。
+
+### 可分享回放页（FUE）
+
+`report export-fue` 会把 `frontend/dist` 一并打进 FUE 静态包的
+`public/dashboard/`，并附带本次运行的 `events.jsonl`、证据与日志。部署后无需后端
+即可回放：
+
+```text
+https://<your-fue-domain>/dashboard/?mode=static
+```
+
+仪表盘在该模式下读取同目录的 `events.jsonl` 完整还原过程时间线、失败定位与
+证据网格（详见导出包内的 `FUE_DEPLOY.md`）。
+
+Run a read-only MR/local range analysis:
+
+```bash
+uv run ai-test-officer run \
+  --mr-url https://git.woa.com/example/project/-/merge_requests/10 \
+  --allow-temp-test-code \
+  --task "分析这个 MR 的测试风险并执行本地安全验证"
+```
+
+For MR URLs, the runner reads Gongfeng with `GONGFENG_ACCESS_TOKEN`, resolves a
+local checkout from `AI_TEST_OFFICER_REPO_ROOTS`, and writes MR metadata plus
+per-file diff artifacts under `runs/<run-id>/context/`. Pass
+`--repo /path/to/local/checkout` to use an explicit checkout.
+
+```bash
+uv run ai-test-officer run \
+  --repo /path/to/business-repo \
+  --git-range "<base>..<head>" \
+  --task "分析这次改动的测试风险并执行本地安全验证"
+```
+
+Allow generated temporary test code in the isolated workspace:
+
+```bash
+uv run ai-test-officer run \
+  --repo /path/to/business-repo \
+  --git-range "<base>..<head>" \
+  --allow-temp-test-code \
+  --task "生成必要的临时测试并验证这次改动"
+```
+
+Send a compact WeCom summary after the run:
+
+```bash
+uv run ai-test-officer run \
+  --repo /path/to/business-repo \
+  --git-range "<base>..<head>" \
+  --allow-temp-test-code \
+  --send \
+  --task "生成必要的临时测试并验证这次改动"
+```
+
+Render the WeCom payload without sending:
+
+```bash
+uv run ai-test-officer run \
+  --repo /path/to/business-repo \
+  --git-range "<base>..<head>" \
+  --notify-dry-run \
+  --task "检查通知内容"
+```
+
+Outputs are written to:
+
+- `runs/<run-id>/report.md`
+- `runs/<run-id>/run.json`
+- `runs/<run-id>/report.html`
+- `runs/<run-id>/events.jsonl`：运行过程事件流（阶段/工具调用/命令/证据/结论），用于实时仪表盘
+- `runs/<run-id>/repo/`
+- `runs/<run-id>/context/`
+- `runs/<run-id>/logs/`
+- `runs/<run-id>/evidence/`
+
+## Local Test Execution
+
+The source repository is never modified. Each run makes an isolated copy in
+`runs/<run-id>/repo/`, applies the selected git range there, and only executes
+commands from the test whitelist.
+
+The current MVP uses deterministic rules for test selection:
+
+- Go changes run `go test ./<changed-dir> -count=1 -v`.
+- Python changes run `python -m unittest discover -s tests -p test_*.py -v`
+  when a `tests/` directory exists.
+- TypeScript/Jest changes can run package-local `npm --prefix <package> test`.
+- Playwright spec/config changes can run package-local e2e scripts discovered
+  from the nearest `package.json`.
+- Rust changes can run `cargo test --workspace`.
+- With `--allow-temp-test-code`, the runner can write temporary test files only
+  under allowed test/evidence paths inside the isolated copy.
+
+Those rules are intentionally conservative. They are not committed to the
+business repo and can be replaced later by richer Agents SDK tool-calling logic.
+
+## Context And Memory
+
+Do not assume the Agents SDK will always compress oversized input for every
+provider. OpenAI Responses API can use truncation or compaction settings, but
+the Doubao/Ark path currently uses the OpenAI-compatible Chat Completions mode.
+For that path this project keeps its own context layer: large diffs are split
+into per-file artifacts under `runs/<run-id>/context/diffs/`, `run.json` stores
+only indexes and summaries, and the model receives structured context plus
+failure excerpts instead of raw full diffs/logs.
+
+## Tool-Calling Smoke
+
+Verify that the configured model can call local function tools and execute a
+synthetic unittest:
+
+```bash
+uv run ai-test-officer smoke tools --run-id doubao-tool-smoke
+```
+
+The smoke result is written under `runs/<run-id>/tool-smoke.json`.
+
+Verify project MCP config shape:
+
+```bash
+uv run ai-test-officer smoke mcp
+```
+
+### Internal platform access
+
+Use `mcporter-internal` for internal platforms such as TAPD and iWiki. It uses
+the local Taihu login and loads only the requested tool schema, so these
+platforms are intentionally not registered as always-on Codex MCP servers.
+
+On a new machine, complete the browser-based authorization once for each
+service; this stores the local authorization and does not require a PAT token.
+
+```bash
+# One-time local authorization; follow the browser prompt.
+mcporter-internal --config config/mcporter.json auth tapd
+mcporter-internal --config config/mcporter.json auth iwiki
+
+# Check the configured services.
+mcporter-internal --config config/mcporter.json list
+
+# TAPD: find a suitable tool, then execute it.
+mcporter-internal --config config/mcporter.json call tapd.lookup_tapd_tool \
+  --args '{"task_description":"查询需求详情"}'
+
+# iWiki: call an iWiki tool on demand.
+mcporter-internal --config config/mcporter.json call \
+  "iwiki.aiSearchDocument(query: '测试方案', limit: 5)"
+```
+
+Do not add `TAI_PAT_TOKEN`, TAPD tokens, or iWiki endpoints to `.env` or
+`.codex/config.toml` for this workflow.
 
 ## Verification
 
-```powershell
-uv run ruff check .
-uv run python -m unittest discover -s tests -p 'test_*.py' -v
-```
-
-Before committing, verify the lockfile and environment:
-
-```powershell
+```bash
 uv lock --check
-uv sync --locked --extra codex --group dev
+uv run ruff check .
+uv run python -m unittest discover -s agents-sdk-agent/tests -p 'test_*.py' -v
 ```
 
-## Current MVP Scope
-
-- Python CLI wrapper around the Codex Python SDK.
-- Structured Test Officer prompt.
-- Markdown report writer.
-- Local dry-run mode for prompt and report iteration.
-- Scenario A local git diff workflow for `--last-commit` and `--git-range`.
-- Scenario A/B/C synthetic competition demos through `scenario create/run`.
-- Scenario A-fullstack demo for backend logic, HTTP API, browser validation, and screenshot evidence.
-- JSON sidecar and static HTML visual report generation.
-- Internal integration doctor for TAPD, iWiki, Gongfeng/TGit, and Playwright MCP.
-- WeCom bot notification dry-run and optional webhook delivery.
-- Repo skill under `.agents/skills/ai-test-officer` for the reusable competition workflow.
-- Docs for competition requirements, architecture, and SDK notes.
-
-Next milestones should add MR diff adapters, real TAPD requirement context,
-scheduled checks, and optional bot intake.
-
-For company-internal demo setup, including TAPD and TGit configuration, see
-[docs/internal-integrations.md](docs/internal-integrations.md).
-
-## Frontend Plan
-
-The competition does not require a frontend, but it encourages graphical or real-time presentation of the testing process and results. This repo now uses a static HTML report as the lightweight presentation layer. It shows the test timeline, changed files, risk level, failures, screenshots, and final verdict without requiring a long-running web service.
-
-## Data Strategy
-
-Do not commit real business code, private PR diffs, logs, screenshots, traces, or requirement documents to this public repository.
-
-Use three data tiers:
-
-1. Synthetic demo data in this repo: small sample diffs, fake requirements, seeded bugs, and safe test outputs.
-2. Sanitized internal examples: only if the team has authorization, remove sensitive paths, names, tokens, customer data, and business details.
-3. Live local evaluation: point the agent at an authorized local or internal repository at runtime, then keep generated reports and evidence out of git unless they are fully sanitized.
-
-For the competition demo, the strongest path is to prepare a small reproducible demo repo with known defects, then optionally show one authorized team-code run locally to prove the workflow transfers to real development code.
-
-## GitHub Sync
-
-After each code change, run the verification commands. If they pass, commit and push the update to `origin/main`:
-
-```powershell
-git status --short
-git add .
-git commit -m "<change summary>"
-git push
-```
+Do not commit `runs/`, `.env`, `.mcp.json`, generated reports, real business
+diffs, logs, screenshots, or private tokens.
