@@ -58,4 +58,7 @@ run_step "Eight replay contracts and public safety" \
     --runs-root "$REPLAY_RUNS_ROOT" \
     --public-root "$PACKAGE_ROOT"
 
+run_step "Competition replay browser E2E" \
+  env COMPETITION_PACKAGE_DIR="$ROOT_DIR/$PACKAGE_ROOT" npm --prefix frontend run e2e
+
 echo "READY competition package: $PACKAGE_ROOT"
