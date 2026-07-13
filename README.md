@@ -18,8 +18,8 @@ implementation is archived under `codex-agent/` for reference only.
   - `src/ai_test_officer/mcp/`: project MCP configuration loading.
   - `src/ai_test_officer/integrations/`: outbound integrations such as WeCom.
 - `codex-agent/`: archived Codex SDK implementation.
-- `frontend/`: React + Vite live dashboard. Built output lands in `frontend/dist/`
-  and is served by the live server or bundled into the FUE export as a replay page.
+- `frontend/`: React + Vite live dashboard and Playwright competition E2E. Built output lands
+  in `frontend/dist/` and is served by the live server or bundled into the public replay package.
 - `runs/`: local ignored run workspaces, generated test code, logs, evidence, and reports.
 - `.codex/`: project MCP configuration template for non-internal tools.
 - `config/mcporter.json`: on-demand internal-platform endpoints for `mcporter-internal`.
@@ -92,6 +92,10 @@ uv run ai-test-officer demo run --scenario refund-guard --planner-mode agent-str
 
 比赛入口填写的 TAPD/MR 链接均为模拟数据；真实只读接入与安全边界见 [`docs/比赛展示说明.md`](docs/比赛展示说明.md)。
 
+当前比赛入口包含 8 个 TAPD/MR 一一对应的独立 `agent-strict` 脱敏回放。默认复杂案例
+`task-45` 支持暂停、1×/2×、重新播放和跳到结论，并展示运行来源、失败驱动补测和运行后
+上下文摘要；`task-53` 会展示安全策略真实拒绝远端写请求。
+
 推荐先跑一键彩排脚本：
 
 ```bash
@@ -99,6 +103,18 @@ scripts/showcase_release_guard.sh
 ```
 
 脚本会生成报告、导出 FUE 静态包，并运行 `demo doctor` 检查公开包是否脱敏。
+
+最终提交前运行完整比赛门禁。默认会重新执行 8 个 Agent 案例；本地快速复核已保存的
+忽略目录回放时，可以显式启用复用模式：
+
+```bash
+scripts/competition_check.sh
+
+# 仅用于本地快速复核，不替代最终重新执行
+AI_TEST_OFFICER_REUSE_REPLAYS=1 scripts/competition_check.sh
+```
+
+门禁包含 Python 测试、前端构建与依赖审计、8 回放契约、公开包脱敏和 Playwright 浏览器 E2E。
 
 也可以手动执行：
 
@@ -268,6 +284,10 @@ certificate work are only needed for a formal business domain.
 - 阶段进度条（准备→规划→执行→校验→报告）
 - 工具调用时间线（实时 spinner / ✓ / ✗，淡入滚动）
 - 策略形成面板（为什么测这些）
+- Agent 运行来源（运行模式、严格工具检查、模型自主工具数和生成测试数）
+- 静态回放控制（暂停、倍速、重新播放、跳到结论和事件进度）
+- 失败驱动补测与真实安全策略拦截证据
+- 运行结束后的结构化上下文摘要与原始隔离证据回读说明
 - 执行状态与实时风险/结论
 - 失败定位（命令/工具失败时红框高亮 + 自动滚动 + 日志/证据链接）
 - 证据网格（截图/日志实时涌入）
