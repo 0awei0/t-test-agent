@@ -40,13 +40,18 @@ def write_local_replay_catalog(
     replay_runs: dict[str, tuple[str, Path]],
     *,
     default_task_id: str,
+    item_metadata: dict[str, dict[str, str]] | None = None,
 ) -> Path:
     root = runs_root.expanduser().resolve()
     target = root / "replays.json"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
         json.dumps(
-            _replay_manifest(replay_runs, default_task_id=default_task_id),
+            _replay_manifest(
+                replay_runs,
+                default_task_id=default_task_id,
+                item_metadata=item_metadata,
+            ),
             ensure_ascii=False,
             indent=2,
         )
@@ -61,9 +66,14 @@ def export_replay_catalog(
     dashboard_dir: Path,
     *,
     default_task_id: str,
+    item_metadata: dict[str, dict[str, str]] | None = None,
 ) -> Path:
     """Add multiple sanitized real-run replays to an exported dashboard."""
-    root = dashboard_dir.expanduser().resolve() / "replays"
+    dashboard_root = dashboard_dir.expanduser().resolve()
+    dashboard_root.mkdir(parents=True, exist_ok=True)
+    if FRONTEND_DIST.exists():
+        shutil.copytree(FRONTEND_DIST, dashboard_root, dirs_exist_ok=True)
+    root = dashboard_root / "replays"
     root.mkdir(parents=True, exist_ok=True)
     for task_id, (_, run_dir) in replay_runs.items():
         source = run_dir.expanduser().resolve()
@@ -76,7 +86,11 @@ def export_replay_catalog(
     manifest = root / "manifest.json"
     manifest.write_text(
         json.dumps(
-            _replay_manifest(replay_runs, default_task_id=default_task_id),
+            _replay_manifest(
+                replay_runs,
+                default_task_id=default_task_id,
+                item_metadata=item_metadata,
+            ),
             ensure_ascii=False,
             indent=2,
         )
@@ -90,6 +104,7 @@ def _replay_manifest(
     replay_runs: dict[str, tuple[str, Path]],
     *,
     default_task_id: str,
+    item_metadata: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     items: list[dict[str, Any]] = []
     for task_id, (scenario, run_dir) in replay_runs.items():
@@ -106,8 +121,7 @@ def _replay_manifest(
                 event_type = str(event.get("type") or "") if isinstance(event, dict) else ""
                 event_counts[event_type] = event_counts.get(event_type, 0) + 1
         memory = metadata.get("memory_summary") if isinstance(metadata.get("memory_summary"), dict) else {}
-        items.append(
-            {
+        item = {
                 "task_id": task_id,
                 "run_id": str(metadata.get("run_id") or source.name),
                 "scenario": scenario,
@@ -117,7 +131,9 @@ def _replay_manifest(
                 "planner_steps": event_counts.get("planner", 0),
                 "compression_ratio": memory.get("compression_ratio", 1.0),
             }
-        )
+        if item_metadata and task_id in item_metadata:
+            item.update(item_metadata[task_id])
+        items.append(item)
     return {"default_task_id": default_task_id, "items": items}
 
 

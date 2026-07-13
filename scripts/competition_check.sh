@@ -7,10 +7,18 @@ cd "$ROOT_DIR"
 CHECK_BASE="${AI_TEST_OFFICER_CHECK_ROOT:-runs/competition-check}"
 CHECK_ID="${AI_TEST_OFFICER_CHECK_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 CHECK_ROOT="$CHECK_BASE/$CHECK_ID"
-DEMO_ROOT="$CHECK_ROOT/demos"
-RUNS_ROOT="$CHECK_ROOT/runs"
-PACKAGE_ROOT="$CHECK_ROOT/edgeone-site/release-guard"
+PACKAGE_ROOT="$CHECK_ROOT/edgeone-site/competition-dashboard"
 ENV_FILE="${AI_TEST_OFFICER_ENV_FILE:-.env}"
+REPLAY_RUNS_ROOT="$CHECK_ROOT/mr-replays"
+REPLAY_DEMO_ROOT="$CHECK_ROOT/mr-replay-demos"
+REPLAY_BUILD_ARGS=()
+
+if [[ "${AI_TEST_OFFICER_REUSE_REPLAYS:-0}" == "1" ]]; then
+  REPLAY_RUNS_ROOT="${AI_TEST_OFFICER_REPLAY_RUNS_ROOT:-runs/mr-replays}"
+  REPLAY_DEMO_ROOT="${AI_TEST_OFFICER_REPLAY_DEMO_ROOT:-runs/mr-replay-demos}"
+  REPLAY_BUILD_ARGS+=(--reuse-existing)
+  echo "INFO reusing locally ignored Agent replay runs from $REPLAY_RUNS_ROOT"
+fi
 
 run_step() {
   local label="$1"
@@ -36,65 +44,18 @@ run_step "Frontend typecheck" npm --prefix frontend run typecheck
 run_step "Frontend build" npm --prefix frontend run build
 run_step "Frontend audit" npm --prefix frontend audit --audit-level=moderate
 
-run_step "Unsafe release scenario" \
-  uv run ai-test-officer demo run \
-    --scenario release-guard \
-    --demo-root "$DEMO_ROOT" \
-    --runs-root "$RUNS_ROOT" \
-    --run-id release-guard \
-    --planner-mode deterministic \
-    --allow-temp-test-code \
-    --env "$ENV_FILE"
-run_step "Unsafe release contract" \
-  uv run python -m ai_test_officer.release_gate \
-    "$RUNS_ROOT/release-guard/run.json" \
-    --expect-verdict fail \
-    --expect-risk high
+run_step "Eight Agent replay package" \
+  uv run python scripts/build_mr_replays.py \
+    --runs-root "$REPLAY_RUNS_ROOT" \
+    --demo-root "$REPLAY_DEMO_ROOT" \
+    --dashboard-dir "$PACKAGE_ROOT" \
+    --env "$ENV_FILE" \
+    "${REPLAY_BUILD_ARGS[@]}"
 
-run_step "Repaired release scenario" \
-  uv run ai-test-officer demo run \
-    --scenario release-guard-pass \
-    --demo-root "$DEMO_ROOT" \
-    --runs-root "$RUNS_ROOT" \
-    --run-id release-guard-pass \
-    --planner-mode deterministic \
-    --allow-temp-test-code \
-    --env "$ENV_FILE"
-run_step "Repaired release contract" \
-  uv run python -m ai_test_officer.release_gate \
-    "$RUNS_ROOT/release-guard-pass/run.json" \
-    --expect-verdict pass \
-    --expect-risk low
+run_step "Eight replay contracts and public safety" \
+  uv run python -m ai_test_officer.replay_gate \
+    --manifest "$PACKAGE_ROOT/replays/manifest.json" \
+    --runs-root "$REPLAY_RUNS_ROOT" \
+    --public-root "$PACKAGE_ROOT"
 
-run_step "Public package export" \
-  uv run ai-test-officer report export-fue \
-    --report "$RUNS_ROOT/release-guard/report.md" \
-    --output "$PACKAGE_ROOT" \
-    --project-slug ai-test-officer-release-guard
-run_step "Public package safety" \
-  uv run ai-test-officer demo doctor \
-    --fue-public "$PACKAGE_ROOT/public" \
-    --require-evidence \
-    --env "$ENV_FILE"
-
-if [[ "${AI_TEST_OFFICER_REQUIRE_AGENT:-0}" == "1" ]]; then
-  run_step "Agent tool loop" \
-    uv run ai-test-officer demo run \
-      --scenario agent-loop \
-      --demo-root "$DEMO_ROOT" \
-      --runs-root "$RUNS_ROOT" \
-      --run-id agent-loop \
-      --planner-mode agent-strict \
-      --allow-temp-test-code \
-      --env "$ENV_FILE"
-  run_step "Agent tool contract" \
-    uv run python -m ai_test_officer.release_gate \
-      "$RUNS_ROOT/agent-loop/run.json" \
-      --expect-verdict fail \
-      --expect-risk high \
-      --require-agent-tools
-else
-  echo "SKIP Agent tool loop; set AI_TEST_OFFICER_REQUIRE_AGENT=1 for the model-backed gate"
-fi
-
-echo "READY competition package: $PACKAGE_ROOT/public"
+echo "READY competition package: $PACKAGE_ROOT"

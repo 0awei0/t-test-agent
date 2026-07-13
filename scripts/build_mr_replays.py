@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ai_test_officer.agent import load_env_file
 from ai_test_officer.demo import DemoRunConfig, run_agent_loop_demo, run_fullstack_demo, run_investigation_demo, run_release_guard_demo
-from ai_test_officer.demo.replay_catalog import DEFAULT_REPLAY_TASK_ID, REPLAY_SPECS
+from ai_test_officer.demo.replay_catalog import DEFAULT_REPLAY_TASK_ID, REPLAY_SPECS, replay_manifest_metadata
 from ai_test_officer.report_site import export_replay_catalog, write_local_replay_catalog
 
 
@@ -59,13 +59,20 @@ def main() -> None:
             for spec in REPLAY_SPECS
             if (runs_root / spec.task_id / "events.jsonl").exists()
         }
-    catalog = write_local_replay_catalog(runs_root, replay_runs, default_task_id=DEFAULT_REPLAY_TASK_ID)
+    metadata = replay_manifest_metadata()
+    catalog = write_local_replay_catalog(
+        runs_root,
+        replay_runs,
+        default_task_id=DEFAULT_REPLAY_TASK_ID,
+        item_metadata=metadata,
+    )
     print(f"Local replay catalog: {catalog}")
     if args.dashboard_dir:
         manifest = export_replay_catalog(
             replay_runs,
             Path(args.dashboard_dir),
             default_task_id=DEFAULT_REPLAY_TASK_ID,
+            item_metadata=metadata,
         )
         print(f"Static replay manifest: {manifest}")
 
