@@ -378,7 +378,9 @@ Required behavior:
 - First call list_changed_files.
 - Read relevant diffs before selecting commands.
 - If package.json files are relevant, call get_package_scripts.
-- For browser/UI changes, prefer existing Playwright/unittest browser tests and preserve screenshot evidence.
+- When changed files include an HTML/CSS/JS UI surface, you must run an existing
+  Playwright/unittest browser test before finalizing and preserve its screenshot evidence.
+  Unit or API tests do not replace this browser check.
 - Run only targeted safe tests through run_test_command.
 - If you need to generate a Python regression test, write it exactly under `tests/`,
   for example `tests/test_agent_generated_discount_boundary.py`.

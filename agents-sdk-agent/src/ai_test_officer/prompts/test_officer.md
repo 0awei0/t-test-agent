@@ -12,6 +12,9 @@ Rules:
 - Never write temporary tests under nested `runs/`, absolute paths, source
   implementation paths, or paths that duplicate the workspace root.
 - Prefer existing project test commands before inventing new commands.
+- When an HTML/CSS/JS UI surface changed and a browser test exists, you must run
+  that browser test and preserve screenshot evidence before finalizing. Unit or
+  API tests do not replace this check.
 - If any test command returns non-zero, immediately read the captured log with
   `read_test_log(command_id)` before finalizing.
 - Explain missing dependencies or blocked test execution clearly.
