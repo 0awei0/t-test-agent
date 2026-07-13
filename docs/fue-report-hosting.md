@@ -1,17 +1,18 @@
-# FUE Report Hosting
+# FUE Report Hosting（内部分享与备用）
 
 AI Test Officer 的报告可以导出为 FUE 静态 Web 应用，避免企微手机端访问开发机 IP/端口失败。
+比赛正式提交默认使用 EdgeOne Makers；本文只描述内部分享和备用托管路径。
 
 ## 结论
 
-- 比赛 demo 用 FUE 测试环境默认 `*.fue.woa.com` HTTPS 域名即可。
+- 内部 demo 用 FUE 测试环境默认 `*.fue.woa.com` HTTPS 域名即可。
 - 不需要先申请自有域名、CNAME 或 HTTPS 证书。
 - 需要有 FUE 登录态，以及一个可部署的 FUE 项目/团队权限。
 - 只有要绑定正式业务域名时，才需要业务侧准备 DNS/CNAME 和证书。
 
 ## 生成静态包
 
-推荐直接用一键脚本生成报告、导出 FUE 包并做脱敏检查：
+备用演示推荐使用快速 `agent-loop` 脚本生成报告、导出 FUE 包并做脱敏检查：
 
 ```bash
 scripts/showcase_agent_loop.sh

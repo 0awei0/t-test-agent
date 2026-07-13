@@ -66,21 +66,22 @@ is archived under `codex-agent/`.
    ```bash
    uv run ai-test-officer smoke tools --run-id doubao-tool-smoke
    ```
-9. For the competition judging demo, prefer the one-command showcase flow:
+9. For the competition judging demo, use `release-guard` as the primary flow:
 
    ```bash
    uv run ai-test-officer demo showcase \
-     --scenario agent-loop \
+     --scenario release-guard \
      --demo-root runs/demos \
      --runs-root runs/showcase \
      --planner-mode agent-strict \
-     --run-id agent-loop-showcase \
-     --export-fue runs/fue-site/agent-loop-showcase \
+     --run-id release-guard-showcase \
+     --export-fue runs/edgeone-site/release-guard-showcase \
      --notify-dry-run
    ```
 
-   After deploying the generated FUE static project, rerun with `--detail-url`
-   and `--send` so WeCom only carries the summary and link.
+   Deploy the generated static project through EdgeOne Makers, then rerun with
+   `--detail-url` and `--send` so WeCom only carries the summary and link.
+   Keep `agent-loop` as the fast fallback when a short, stable tool-loop demo is needed.
 
 ## Guardrails
 

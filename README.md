@@ -123,24 +123,24 @@ uv run ai-test-officer demo doctor \
 这条命令会生成报告并导出可部署的静态包。**比赛展示和对外交付默认使用 EdgeOne Makers**：
 按 [`docs/部署.md`](docs/部署.md) 完成部署、获取预览链接，再前往[大赛官网](https://portal.learn.woa.com/pages/activityLaodingPage/index.html?scheme_type=aiBlock&from=xx#topics)提交作品；只有官网已上传作品链接才算成功参赛。之后可继续迭代作品，建议尽早提交 Demo 或说明文档，以参与早鸟激励等活动。
 
-拿到 EdgeOne 预览链接后，再用该链接发企微摘要：
+拿到 EdgeOne 预览链接后，再用主演示结果和该链接发企微摘要：
 
-FUE `public/` 中只包含可分享的 `index.html`、`report.md`、脱敏 `public-run.json`
+公开 `public/` 中只包含可分享的 `index.html`、`report.md`、脱敏 `public-run.json`
 和证据文件；完整 `run.json`、日志和本地绝对路径继续只留在 `runs/<run-id>/`。
 
 ```bash
 uv run ai-test-officer demo showcase \
-  --scenario agent-loop \
+  --scenario release-guard \
   --demo-root runs/demos \
   --runs-root runs/showcase \
   --planner-mode agent-strict \
-  --run-id agent-loop-showcase \
-  --export-fue runs/fue-site/agent-loop-showcase \
-  --detail-url https://<your-fue-domain>/index.html \
+  --run-id release-guard-showcase \
+  --export-fue runs/edgeone-site/release-guard-showcase \
+  --detail-url https://<your-edgeone-preview-url>/ \
   --send
 ```
 
-企微手机端优先点击 FUE 链接。开发机 `http://<host>:8788` 只用于本地调试，
+企微手机端优先点击 EdgeOne 链接。开发机 `http://<host>:8788` 只用于本地调试，
 不建议作为现场或手机端最终链接。
 
 真实 MR 验证使用通用的 `run --mr-url` 或 `batch mr` 入口。真实 URL、diff、日志和报告
@@ -151,9 +151,9 @@ uv run ai-test-officer demo showcase \
 `--planner-mode deterministic`，用于检查 HTML/FUE/企微格式；正式演示应使用
 `agent-strict`，这样报告会展示 Agent 多轮工具调用和关键工具检查。
 
-Create and run the synthetic fullstack demo first. This is the most stable way
-to show the full testing loop: code diff analysis, temporary tests, API checks,
-browser evidence when Playwright is installed, and an HTML report.
+The synthetic `fullstack` scenario remains available as an additional development
+example for code diff analysis, temporary tests, API checks, browser evidence,
+and HTML reporting. It is not the primary competition flow.
 
 ```bash
 uv run ai-test-officer demo create \

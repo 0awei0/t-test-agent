@@ -88,14 +88,14 @@ git status --short
 优先级：P0
 预计时间：0.5 天
 
-- [ ] 将 `release-guard` 统一为主演示。
-- [ ] 将 `agent-loop` 统一为快速兜底。
-- [ ] 将 `release-guard-pass` 作为修复对照案例。
-- [ ] 统一 README、Repo Skill、复现文档和脚本中的命令、目录与说法。
-- [ ] 明确 EdgeOne 是最终提交入口，FUE 是备用分享入口。
-- [ ] 固定 `agent-strict`、run-id、输出目录、`.env` 和临时测试参数。
-- [ ] 明确模型、Playwright 或浏览器缺失时的降级行为。
-- [ ] 删除或标记失效命令，避免现场使用错误入口。
+- [x] 将 `release-guard` 统一为主演示。
+- [x] 将 `agent-loop` 统一为快速兜底。
+- [x] 将 `release-guard-pass` 作为修复对照案例。
+- [x] 统一 README、Repo Skill、复现文档和脚本中的命令、目录与说法。
+- [x] 明确 EdgeOne 是最终提交入口，FUE 是备用分享入口。
+- [x] 固定 `agent-strict`、run-id、输出目录、`.env` 和临时测试参数。
+- [x] 明确模型、Playwright 或浏览器缺失时的降级行为。
+- [x] 删除或标记失效命令，避免现场使用错误入口。
 
 #### 验收标准
 
@@ -212,7 +212,7 @@ scripts/competition_check.sh
 - 前端 TypeScript 检查和生产构建已通过。
 - 后端共发现 85 个测试：80 个通过；其余结果受当前执行环境禁止监听本地端口影响，需在普通开发环境重新验证。
 - 当前工作区包含较大规模的 Agents SDK 迁移改动，尚未形成干净、可从远端复现的交付版本。
-- README、Repo Skill 和脚本中的主演示口径仍需统一。
+- README、Repo Skill、展示文档和脚本已统一使用 `release-guard` 主演示、`agent-loop` 快速兜底、EdgeOne 正式提交和 FUE 备用分享口径。
 
 ## 7. 执行顺序
 
