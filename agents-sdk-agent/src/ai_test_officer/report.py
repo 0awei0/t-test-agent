@@ -530,6 +530,7 @@ def _render_structured_html(record: RunRecord, markdown: str) -> str:
     .hero {{ background: #132238; color: #f7fbff; border-radius: 8px; padding: 28px; margin-bottom: 18px; }}
     .hero p {{ max-width: 880px; margin: 12px 0 0; color: #d9e5f2; }}
     .launcher-link {{ display: inline-block; margin-top: 18px; padding: 10px 14px; border: 1px solid #8ab4f8; border-radius: 8px; color: #fff; font-weight: 700; text-decoration: none; }}
+    .launcher-link.secondary {{ margin-left: 8px; border-color: rgba(255,255,255,.35); color: #d9e5f2; }}
     .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 12px; margin-top: 20px; }}
     .metric {{ background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.16); border-radius: 8px; padding: 13px; min-height: 62px; }}
     .metric b {{ display: block; font-size: 12px; opacity: .78; margin-bottom: 8px; }}
@@ -587,7 +588,8 @@ def _render_structured_html(record: RunRecord, markdown: str) -> str:
   <div class="hero">
     <h1>AI 测试官报告</h1>
     <p>{html.escape(record.summary)}</p>
-    <a class="launcher-link" href="dashboard/">体验模拟 TAPD / 工蜂测试任务 →</a>
+    <a class="launcher-link" href="dashboard/?mode=static">查看真实执行结果回放 →</a>
+    <a class="launcher-link secondary" href="dashboard/">体验合成 TAPD / 工蜂任务</a>
     <div class="grid">
       <div class="metric"><b>结论</b><span class="badge {verdict_class}">{html.escape(record.verdict)}</span></div>
       <div class="metric"><b>风险</b>{html.escape(record.risk)}</div>

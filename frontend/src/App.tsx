@@ -223,16 +223,23 @@ export default function App() {
           <span className="sub">AI 测试官 · 发布决策驾驶舱</span>
         </div>
         <div className="runmeta">
-          <span className="runid">{runId}</span>
+          <span className="runid">{staticMode ? "真实执行结果回放" : runId}</span>
           <span className={`conn ${connected ? "on" : ""}`}>
-            {connected ? (done ? "已结束" : "直播中") : "连接中…"}
+            {connected ? (staticMode ? "已脱敏" : done ? "已结束" : "直播中") : "连接中…"}
           </span>
         </div>
       </header>
 
+      {staticMode && (
+        <section className="replay-notice">
+          <b>真实执行结果回放</b>
+          <span>以下阶段、命令、失败信号和证据来自一次已完成的合成测试运行；当前静态页面不会连接真实 TAPD、工蜂或执行测试。</span>
+        </section>
+      )}
+
       <section className="briefing">
         <div>
-          <span className="eyebrow">本次测试任务</span>
+          <span className="eyebrow">{staticMode ? "已完成的合成验证" : "本次测试任务"}</span>
           <h1>{task || "正在读取变更与测试任务…"}</h1>
         </div>
         <div className="risk-map">

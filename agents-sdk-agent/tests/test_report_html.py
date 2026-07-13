@@ -77,6 +77,9 @@ class ReportHtmlTests(unittest.TestCase):
             html = render_html(render_markdown(record), record=record)
 
             self.assertIn("决策摘要", html)
+            self.assertIn('href="dashboard/?mode=static"', html)
+            self.assertIn("查看真实执行结果回放", html)
+            self.assertIn("体验合成 TAPD / 工蜂任务", html)
             self.assertIn("变更意图", html)
             self.assertIn("主要风险", html)
             self.assertIn("策略取舍", html)
