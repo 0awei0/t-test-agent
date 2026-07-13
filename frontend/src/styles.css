@@ -41,6 +41,13 @@ body {
   padding: 18px 20px 60px;
   min-width: 0;
 }
+.replay-notice { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.replay-notice > div:first-child { display: grid; gap: 2px; min-width: 0; }
+.replay-controls { display: flex; align-items: center; justify-content: flex-end; gap: 7px; flex-wrap: wrap; flex: 0 0 auto; }
+.replay-controls button { border: 1px solid #b9c9e4; border-radius: 8px; padding: 7px 10px; background: #fff; color: var(--brand); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.replay-controls button:hover, .replay-controls button.active { border-color: var(--active); background: var(--active-bg); color: var(--active); }
+.replay-controls button:disabled { cursor: not-allowed; opacity: .45; }
+.replay-progress { min-width: 54px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
 .launcher-shell { max-width: 1120px; margin: 0 auto; padding: 28px 20px 64px; }
 .launcher-brand { display: flex; align-items: baseline; gap: 10px; margin-bottom: 26px; color: var(--brand); font-size: 22px; font-weight: 850; }
 .launcher-brand small { color: var(--muted); font-size: 13px; font-weight: 600; }

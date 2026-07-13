@@ -41,6 +41,24 @@ test("fits the competition workbench on a mobile viewport", async ({ page }) => 
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
+test("controls static replay speed, pause, skip, and restart", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/?mode=static&replay=task-45");
+  const controls = page.getByLabel("回放控制");
+  await expect(controls).toBeVisible();
+  await controls.getByRole("button", { name: "暂停" }).click();
+  const progress = controls.locator(".replay-progress");
+  const pausedAt = await progress.textContent();
+  await page.waitForTimeout(700);
+  await expect(progress).toHaveText(pausedAt ?? "");
+  await controls.getByRole("button", { name: "2×" }).click();
+  await controls.getByRole("button", { name: "继续" }).click();
+  await controls.getByRole("button", { name: "跳到结论" }).click();
+  await expect(page.getByText("建议阻断", { exact: true })).toBeVisible();
+  await controls.getByRole("button", { name: "重新播放" }).click();
+  await expect(controls.getByRole("button", { name: "暂停" })).toBeEnabled();
+});
+
 async function installSyntheticReplayRoutes(page: Page): Promise<void> {
   const items = tasks.map((id) => ({
     task_id: `task-${id}`,

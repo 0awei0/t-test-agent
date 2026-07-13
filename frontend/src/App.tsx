@@ -8,7 +8,7 @@ import {
   reportUrl,
   startDemoExecution,
 } from "./api";
-import type { ReplayItem } from "./api";
+import type { PlaybackState, ReplayItem, StreamHandle } from "./api";
 import type {
   AppEvent,
   CommandEvent,
@@ -122,7 +122,7 @@ function DemoLauncher() {
       <header className="launcher-brand"><span>Release Guard</span><small>AI 测试官 · 比赛演示入口</small></header>
       <section className="launcher-hero compact">
         <div><span className="eyebrow">SYNTHETIC TASK · REAL AGENT RUN</span><h1>需求与变更一一对应，生成计划后立即验证</h1><p>每张任务卡绑定一个 TAPD 需求和一个工蜂 MR；线上动态复盘真实脱敏事件，本地可一键启动 Agent。</p></div>
-        <a className="replay-entry" href={replayUrl("task-45")}>播放复杂 MR 真实回放 →</a>
+        <a className="replay-entry" href={`${replayUrl("task-45")}&judge=1`}>一键评委演示（2×）→</a>
       </section>
       <section className="task-workbench">
         <div className="task-library"><div className="section-heading"><div><span>01 · 选择任务</span><h2>TAPD × 工蜂 MR</h2></div><em>一一对应 · 合成数据</em></div><div className="task-list">{DEMO_TASKS.map((item) => { const replay = replays[item.id]; return <button key={item.id} type="button" className={`task-card ${item.expected} ${item.id === taskId ? "selected" : ""}`} onClick={() => selectTask(item.id)} aria-pressed={item.id === taskId}><div className="task-card-head"><span>{item.tapdId}</span><span>MR {item.iid}</span><em>{replay ? "● 已有真实回放" : item.expected === "pass" ? "修复验证" : "风险阻断"}</em></div><strong>{item.requirement}</strong><p>{item.mrTitle}</p><small>{item.summary}</small>{replay && <span className="replay-metrics">{replay.tool_calls} 次工具调用 · {replay.verdict}/{replay.risk}</span>}</button>; })}</div></div>
@@ -149,10 +149,27 @@ export default function App() {
   const [isolation, setIsolation] = useState<IsolationEvent | null>(null);
   const [done, setDone] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [playback, setPlayback] = useState<PlaybackState>({ current: 0, total: 0, paused: false, speed: 1, finished: false });
   const failureRef = useRef<HTMLDivElement | null>(null);
+  const streamRef = useRef<StreamHandle | null>(null);
 
   useEffect(() => {
     if (!runId && !staticMode) return;
+    const resetReplay = () => {
+      setStarted(new Set());
+      setFinished(new Set());
+      setCommands({});
+      setToolCalls({});
+      setPlannerSteps([]);
+      setTask("");
+      setChangedFiles([]);
+      setEvidence([]);
+      setVerdict(null);
+      setMemory(null);
+      setIsolation(null);
+      setDone(false);
+      setConnected(false);
+    };
     const source = openStream(
       runId,
       (event: AppEvent) => {
@@ -202,8 +219,11 @@ export default function App() {
             break;
         }
       },
-      () => setDone(true)
+      () => setDone(true),
+      resetReplay,
+      setPlayback
     );
+    streamRef.current = source;
     return () => source?.close();
   }, [runId, staticMode]);
 
@@ -250,8 +270,14 @@ export default function App() {
 
       {staticMode && (
         <section className="replay-notice">
-          <b>真实执行动态复盘</b>
-          <span>系统正按真实事件顺序逐步播放 Agent 的规划、工具调用、命令、失败日志和证据；数据已脱敏，线上页面不持有模型密钥。</span>
+          <div><b>真实执行动态复盘</b><span>按真实事件顺序播放 Agent 的规划、工具、命令、失败日志和证据；数据已脱敏。</span></div>
+          <div className="replay-controls" aria-label="回放控制">
+            <button type="button" onClick={() => playback.paused ? streamRef.current?.resume?.() : streamRef.current?.pause?.()} disabled={playback.finished}>{playback.paused ? "继续" : "暂停"}</button>
+            {[1, 2].map((speed) => <button key={speed} type="button" className={playback.speed === speed ? "active" : ""} onClick={() => streamRef.current?.setSpeed?.(speed)}>{speed}×</button>)}
+            <button type="button" onClick={() => streamRef.current?.skipToEnd?.()} disabled={playback.finished}>跳到结论</button>
+            <button type="button" onClick={() => streamRef.current?.restart?.()}>重新播放</button>
+            <span className="replay-progress" aria-live="polite">{playback.current}/{playback.total || "…"}</span>
+          </div>
         </section>
       )}
 
