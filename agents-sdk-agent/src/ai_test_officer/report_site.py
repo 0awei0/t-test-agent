@@ -331,6 +331,12 @@ def _public_run_json(data: dict[str, Any]) -> dict[str, Any]:
         "verdict": data.get("verdict"),
         "risk": data.get("risk"),
         "summary": data.get("summary"),
+        "change_intent": data.get("change_intent"),
+        "risk_findings": data.get("risk_findings", []),
+        "strategy_rationale": data.get("strategy_rationale", []),
+        "coverage_scope": data.get("coverage_scope", []),
+        "untested_scope": data.get("untested_scope", []),
+        "recommendations": data.get("recommendations", []),
         "detail_url": data.get("detail_url"),
     }
     return _redact_structure(public_data)

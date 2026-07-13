@@ -38,6 +38,7 @@ class NotifyTests(unittest.TestCase):
         self.assertIn("AI 测试官", markdown)
         self.assertIn("场景:", markdown)
         self.assertIn("checkout.py", markdown)
+        self.assertIn("最高风险:", markdown)
         self.assertIn("runs/notify-run/report.md", markdown)
         self.assertNotIn("/source", markdown)
         self.assertNotIn("/workspace", markdown)

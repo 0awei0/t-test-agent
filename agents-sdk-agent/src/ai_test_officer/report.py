@@ -27,7 +27,91 @@ def finalize_record(record: RunRecord) -> RunRecord:
     return record
 
 
+def populate_decision_context(record: RunRecord) -> RunRecord:
+    if not isinstance(record.change_intent, str) or not record.change_intent:
+        record.change_intent = f"依据测试任务，本次验证目标为：{record.task.strip()}"
+    if not isinstance(record.risk_findings, list) or not record.risk_findings:
+        record.risk_findings = _deterministic_risk_findings(record)
+    if not isinstance(record.strategy_rationale, list) or not record.strategy_rationale:
+        planner = "模型自主规划" if record.planner_mode in {"agent", "agent-strict"} else "确定性安全规划"
+        record.strategy_rationale = [
+            f"使用{planner}选择与变更文件直接相关的本地测试命令。",
+            "所有命令只在隔离副本中执行，并受测试白名单约束。",
+        ]
+        if record.generated_files:
+            record.strategy_rationale.append("允许 Agent 在隔离工作区补充临时边界测试，不修改原始仓库。")
+    if not isinstance(record.coverage_scope, list) or not record.coverage_scope:
+        record.coverage_scope = _deterministic_coverage_scope(record)
+    if not isinstance(record.untested_scope, list) or not record.untested_scope:
+        record.untested_scope = _deterministic_untested_scope(record)
+    if not isinstance(record.recommendations, list) or not record.recommendations:
+        record.recommendations = _deterministic_recommendations(record)
+    return record
+
+
+def _deterministic_risk_findings(record: RunRecord) -> list[str]:
+    findings: list[str] = []
+    for item in record.changed_files[:5]:
+        suffix = Path(item.path).suffix.lower()
+        if suffix in {".py", ".go", ".rs", ".ts", ".tsx", ".js", ".jsx"}:
+            reason = "可执行逻辑发生变化，需要定向回归"
+        elif "test" in item.path.lower():
+            reason = "测试资产变化可能改变覆盖范围或回归信号"
+        else:
+            reason = "变更影响需结合上下文与执行证据确认"
+        findings.append(f"{item.status} {item.path}：{reason}。")
+    for command in record.commands:
+        if command.returncode != 0:
+            findings.append(
+                f"{command.command} 执行失败，分类为 {classify_command_failure(command)[0]}。"
+            )
+    return findings or ["没有足够的变更或执行证据生成具体风险项。"]
+
+
+def _deterministic_coverage_scope(record: RunRecord) -> list[str]:
+    scope = [f"检查 {len(record.changed_files)} 个变更文件并建立风险地图。"]
+    if record.commands:
+        scope.append(f"执行 {len(record.commands)} 条白名单测试命令并保存完整日志。")
+    if record.generated_files:
+        scope.append(f"生成 {len(record.generated_files)} 个隔离临时测试文件。")
+    if record.evidence_files:
+        scope.append(f"采集 {len(record.evidence_files)} 个可复核证据文件。")
+    return scope
+
+
+def _deterministic_untested_scope(record: RunRecord) -> list[str]:
+    gaps: list[str] = []
+    if not record.commands:
+        gaps.append("未选出可安全执行的测试命令。")
+    if not record.generated_files:
+        gaps.append("本次未生成额外的临时边界测试。")
+    if not any(item.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"} for item in record.evidence_files):
+        gaps.append("未获得浏览器截图证据；前端体验仍需人工或 Playwright 补充确认。")
+    if record.checkout_status != "ready":
+        gaps.append("精确代码准备未完成，结论仅基于可用上下文。")
+    return gaps or ["本次计划内的定向验证均已执行；更大范围回归不在当前任务范围内。"]
+
+
+def _deterministic_recommendations(record: RunRecord) -> list[str]:
+    if record.failure_category in {"dependency-missing", "environment-missing", "checkout-blocked"}:
+        primary = "先补齐依赖或运行环境，再重新执行相同验证，当前结果不能证明业务回归。"
+    elif record.failure_category == "agent-incomplete":
+        primary = "修复模型或工具配置并重新运行 agent-strict，当前 Agent 闭环不完整。"
+    elif record.verdict == "fail":
+        primary = "在失败命令的根因被修复并通过同一组回归前，阻断本次发布。"
+    elif record.verdict == "pass":
+        primary = "定向验证已通过；结合未覆盖范围决定是否补充更大范围回归。"
+    else:
+        primary = "补充可执行的定向测试和证据后再做发布判断。"
+    return [
+        primary,
+        "对外分享前复核公开报告和证据的脱敏结果。",
+        "真实 MR 验证继续保留在隔离的 runs/<run-id>/ 工作区内。",
+    ]
+
+
 def write_outputs(record: RunRecord, agent_summary: str | None = None) -> None:
+    populate_decision_context(record)
     record.run_dir.mkdir(parents=True, exist_ok=True)
     markdown = render_markdown(record, agent_summary)
     record.report_path.write_text(markdown, encoding="utf-8")
@@ -44,6 +128,7 @@ def write_outputs(record: RunRecord, agent_summary: str | None = None) -> None:
 
 
 def render_markdown(record: RunRecord, agent_summary: str | None = None) -> str:
+    populate_decision_context(record)
     changed = "\n".join(f"- {item.status}\t{item.path}" for item in record.changed_files) or "- 无"
     generated = (
         "\n".join(f"- {item.path.relative_to(record.run_dir)}: {item.reason}" for item in record.generated_files)
@@ -57,6 +142,7 @@ def render_markdown(record: RunRecord, agent_summary: str | None = None) -> str:
     memory = _memory_block(record)
     safety = _safety_block(record)
     findings = _findings(record)
+    decision_context = _decision_context_block(record)
     agent_decision_text = redact_secrets(record.agent_final_output.strip())
     agent_decision = f"\n## Agent 判断\n{agent_decision_text}\n" if agent_decision_text else ""
     agent_block = f"\n## Agent 总结\n{agent_summary}\n" if agent_summary else ""
@@ -67,6 +153,9 @@ def render_markdown(record: RunRecord, agent_summary: str | None = None) -> str:
 - 风险: {record.risk}
 - {record.summary}
 {agent_decision}
+
+## 决策依据
+{decision_context}
 
 ## 范围
 {mr}
@@ -108,9 +197,33 @@ def render_markdown(record: RunRecord, agent_summary: str | None = None) -> str:
 {findings}
 
 ## 建议下一步
-- 对外分享前先复核生成的日志和报告。
-- 真实 MR 验证继续保留在隔离的 `runs/<run-id>/` 工作区内。
+{_markdown_list(record.recommendations)}
 {agent_block}"""
+
+
+def _decision_context_block(record: RunRecord) -> str:
+    return "\n".join(
+        [
+            "### 变更意图",
+            record.change_intent,
+            "",
+            "### 主要风险",
+            _markdown_list(record.risk_findings),
+            "",
+            "### 策略取舍",
+            _markdown_list(record.strategy_rationale),
+            "",
+            "### 已覆盖范围",
+            _markdown_list(record.coverage_scope),
+            "",
+            "### 未覆盖范围",
+            _markdown_list(record.untested_scope),
+        ]
+    )
+
+
+def _markdown_list(items: list[str]) -> str:
+    return "\n".join(f"- {item}" for item in items) or "- 无"
 
 
 def render_html(markdown: str, *, record: RunRecord | None = None) -> str:
@@ -236,6 +349,12 @@ def _to_json(record: RunRecord) -> str:
         "verdict": record.verdict,
         "risk": record.risk,
         "summary": record.summary,
+        "change_intent": record.change_intent,
+        "risk_findings": record.risk_findings,
+        "strategy_rationale": record.strategy_rationale,
+        "coverage_scope": record.coverage_scope,
+        "untested_scope": record.untested_scope,
+        "recommendations": record.recommendations,
         "detail_url": record.detail_url,
         "published_report_path": path(record.published_report_path),
     }
@@ -353,6 +472,7 @@ def _evidence_block(record: RunRecord) -> str:
 
 
 def _render_structured_html(record: RunRecord, markdown: str) -> str:
+    populate_decision_context(record)
     verdict_class = "fail" if record.verdict == "fail" else "pass" if record.verdict == "pass" else "warn"
     audience = _audience_context(record)
     findings = _html_findings(record)
@@ -360,6 +480,11 @@ def _render_structured_html(record: RunRecord, markdown: str) -> str:
     recommended = _html_recommended_action(record)
     agent_decision = _html_agent_decision(record)
     sandbox = _html_sandbox(record)
+    risk_items = _html_text_list(record.risk_findings)
+    strategy_items = _html_text_list(record.strategy_rationale)
+    coverage_items = _html_text_list(record.coverage_scope)
+    untested_items = _html_text_list(record.untested_scope)
+    recommendation_items = _html_text_list(record.recommendations)
     changed = "".join(
         f"<li><code>{html.escape(item.status)}</code> {html.escape(item.path)}</li>"
         for item in record.changed_files
@@ -491,6 +616,19 @@ def _render_structured_html(record: RunRecord, markdown: str) -> str:
     </section>
   </div>
   {agent_decision}
+  <section>
+    <h2>变更意图</h2>
+    <p>{html.escape(record.change_intent)}</p>
+  </section>
+  <div class="band">
+    <section><h2>主要风险</h2><ul>{risk_items}</ul></section>
+    <section><h2>策略取舍</h2><ul>{strategy_items}</ul></section>
+  </div>
+  <div class="band">
+    <section><h2>已覆盖范围</h2><ul>{coverage_items}</ul></section>
+    <section><h2>未覆盖范围</h2><ul>{untested_items}</ul></section>
+  </div>
+  <section><h2>建议动作</h2><ul>{recommendation_items}</ul></section>
   <section>
     <h2>上下文</h2>
     <ul>
@@ -780,6 +918,10 @@ def _relative_or_raw(record: RunRecord, path: Path | None) -> str:
         return str(path.relative_to(record.run_dir))
     except ValueError:
         return str(path)
+
+
+def _html_text_list(items: list[str]) -> str:
+    return "".join(f"<li>{html.escape(item)}</li>" for item in items) or "<li>无</li>"
 
 
 def _html_findings(record: RunRecord) -> str:

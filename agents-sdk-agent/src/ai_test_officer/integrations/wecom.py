@@ -23,12 +23,16 @@ class NotifyResult:
 
 
 def build_wecom_markdown(record: RunRecord) -> str:
+    from ..report import populate_decision_context
+
+    populate_decision_context(record)
     scenario = _scenario_label(record)
     changed = ", ".join(item.path for item in record.changed_files[:5]) or "无"
     if len(record.changed_files) > 5:
         changed += f", +{len(record.changed_files) - 5} more"
     generated = "是" if record.generated_files else "否"
     color = "warning" if record.verdict == "fail" else "info"
+    top_risk = record.risk_findings[0] if record.risk_findings else "无"
     if record.detail_url:
         return (
             "**AI 测试官**\n"
@@ -36,6 +40,7 @@ def build_wecom_markdown(record: RunRecord) -> str:
             f"> 结论: <font color=\"{color}\">{record.verdict}</font>\n"
             f"> 风险: `{record.risk}`\n"
             f"> 变更: `{changed}`\n"
+            f"> 最高风险: {top_risk}\n"
             f"> 结果: {record.summary}\n"
             f"> [查看完整测试报告]({record.detail_url})"
         )
@@ -47,6 +52,7 @@ def build_wecom_markdown(record: RunRecord) -> str:
         f"> 风险: `{record.risk}`\n"
         f"> 变更: `{changed}`\n"
         f"> 临时测试: `{generated}`\n"
+        f"> 最高风险: {top_risk}\n"
         f"> 摘要: {record.summary}\n"
         f"> 报告: `runs/{record.run_id}/report.md`"
     )

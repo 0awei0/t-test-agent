@@ -10,6 +10,7 @@ Language rules:
 
 Include:
 - Verdict and risk.
+- Change intent, risk evidence, strategy tradeoffs, covered scope, and untested scope.
 - Changed surfaces and why they matter.
 - Commands that ran, exit codes, and failure causes.
 - Missing dependencies or environment blockers.

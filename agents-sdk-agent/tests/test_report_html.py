@@ -77,6 +77,12 @@ class ReportHtmlTests(unittest.TestCase):
             html = render_html(render_markdown(record), record=record)
 
             self.assertIn("决策摘要", html)
+            self.assertIn("变更意图", html)
+            self.assertIn("主要风险", html)
+            self.assertIn("策略取舍", html)
+            self.assertIn("已覆盖范围", html)
+            self.assertIn("未覆盖范围", html)
+            self.assertIn("建议动作", html)
             self.assertNotIn("Agent 多轮过程", html)
             self.assertNotIn("<h2>规划轨迹</h2>", html)
             self.assertNotIn("为什么这不是纯 workflow", html)

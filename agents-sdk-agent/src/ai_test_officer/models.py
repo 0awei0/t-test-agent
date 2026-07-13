@@ -112,6 +112,12 @@ class RunRecord:
     verdict: str = "needs-follow-up"
     risk: str = "medium"
     summary: str = ""
+    change_intent: str = ""
+    risk_findings: list[str] = field(default_factory=list)
+    strategy_rationale: list[str] = field(default_factory=list)
+    coverage_scope: list[str] = field(default_factory=list)
+    untested_scope: list[str] = field(default_factory=list)
+    recommendations: list[str] = field(default_factory=list)
     agent_final_output: str = ""
     detail_url: str | None = None
     published_report_path: Path | None = None
