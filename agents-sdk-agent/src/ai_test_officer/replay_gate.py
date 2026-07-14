@@ -14,6 +14,8 @@ COMPLEX_EVENT_TYPES = {
     "context",
     "isolation",
     "planner",
+    "test_plan",
+    "plan_update",
     "tool_call",
     "command",
     "evidence",

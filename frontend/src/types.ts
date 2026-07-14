@@ -34,6 +34,33 @@ export interface PlannerEvent {
   step: string;
 }
 
+export type TestPlanStatus = "planned" | "running" | "passed" | "failed" | "blocked";
+
+export interface TestPlanItem {
+  id: string;
+  title: string;
+  layer: string;
+  target: string;
+  command: string;
+  evidence: string;
+  status: TestPlanStatus;
+  detail?: string;
+  adaptive: boolean;
+}
+
+export interface TestPlanEvent {
+  summary: string;
+  items: Omit<TestPlanItem, "status">[];
+}
+
+export interface PlanUpdateEvent {
+  id: string;
+  status: TestPlanStatus;
+  detail?: string;
+  command?: string;
+  adaptive?: boolean;
+}
+
 export interface EvidenceEvent {
   path: string;
   kind: string;

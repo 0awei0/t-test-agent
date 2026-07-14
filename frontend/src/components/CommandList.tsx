@@ -4,6 +4,7 @@ import { fileUrl } from "../api";
 interface Props {
   commands: CommandEvent[];
   runId: string;
+  focusedCommand?: string;
 }
 
 function label(status: CommandEvent["status"]): string {
@@ -13,14 +14,14 @@ function label(status: CommandEvent["status"]): string {
   return "失败";
 }
 
-export function CommandList({ commands, runId }: Props) {
+export function CommandList({ commands, runId, focusedCommand = "" }: Props) {
   if (commands.length === 0) {
     return <div className="muted pad">尚无测试命令。</div>;
   }
   return (
     <ul className="cmdlist">
-      {commands.map((c) => (
-        <li key={c.id} className={`cmdrow ${c.status}`}>
+      {commands.map((c, index) => (
+        <li id={`command-${index}`} key={c.id} className={`cmdrow ${c.status} ${focusedCommand === c.command ? "focused" : ""}`}>
           <span className={`cmdstatus ${c.status}`}>{label(c.status)}</span>
           <code className="cmd">{c.command}</code>
           {typeof c.returncode === "number" ? (

@@ -27,6 +27,11 @@ test("replays pass and blocked decisions with Agent evidence", async ({ page }) 
   await expect(page.getByText("失败驱动补测已完成", { exact: true })).toBeVisible();
   await expect(page.getByText("运行上下文摘要 / 归档压缩", { exact: true })).toBeVisible();
   await expect(page.getByText("安全隔离边界", { exact: true })).toBeVisible();
+  const plan = page.getByLabel("Agent 测试计划");
+  await expect(plan).toBeVisible();
+  await expect(plan.locator(".plan-node").first()).toBeVisible();
+  await plan.locator(".plan-node").last().click();
+  await expect(page.locator(".cmdrow.focused")).toBeVisible();
   await page.reload();
   await expect(page.getByText("复盘完成", { exact: true })).toBeVisible();
 
@@ -98,7 +103,12 @@ function replayEvents(taskId: string): string {
     ["phase", { phase: "planning", status: "start" }],
     ["planner", { step: "读取需求与 diff，选择风险验证" }],
     ["tool_call", { id: "tool-1", tool: "read_file_diff", status: "ok", output: "diff reviewed" }],
+    ["test_plan", { summary: "优先验证业务规则、接口契约与页面主链", items: [
+      { id: "plan-1", title: "优惠边界单测", layer: "单元测试", target: "Coupon Policy", command: "python -m unittest", evidence: "命令日志", adaptive: false },
+    ] }],
+    ["plan_update", { id: "plan-1", status: "running", command: "python -m unittest", detail: "开始执行计划项", adaptive: false }],
     ["command", { id: "command-1", command: "python -m unittest", status: passes ? "ok" : "fail", returncode: passes ? 0 : 1 }],
+    ["plan_update", { id: "plan-1", status: passes ? "passed" : "failed", command: "python -m unittest", detail: passes ? "验证通过" : "exit 1", adaptive: false }],
     ["evidence", { path: "evidence/result.txt", kind: "log", caption: "脱敏证据" }],
     ["memory", { mode: "structured", source_chars: 1000, summary_chars: 420, compression_ratio: 0.42, artifact_count: 2 }],
     ["provenance", { run_id: taskId, planner_mode: "agent-strict", strict_tools_passed: true, tool_calls: 4, model_tool_calls: 4, commands: 1, generated_tests: 1, evidence: 1 }],

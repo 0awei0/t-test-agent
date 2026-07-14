@@ -54,6 +54,29 @@ class EventSink:
     def planner(self, step: str) -> None:
         self.emit("planner", step=step)
 
+    def test_plan(self, *, summary: str, items: list[dict[str, object]]) -> None:
+        """Publish the Agent's structured plan before test execution starts."""
+        self.emit("test_plan", summary=summary, items=items)
+
+    def plan_update(
+        self,
+        *,
+        id: str,
+        status: str,
+        detail: str = "",
+        command: str = "",
+        adaptive: bool = False,
+    ) -> None:
+        """Update one plan item as the corresponding command progresses."""
+        self.emit(
+            "plan_update",
+            id=id,
+            status=status,
+            detail=detail,
+            command=command,
+            adaptive=adaptive,
+        )
+
     def context(self, task: str, changed_files: list[dict[str, str]]) -> None:
         self.emit("context", task=task, changed_files=changed_files)
 

@@ -128,13 +128,14 @@ class RunnerTests(unittest.TestCase):
                     [
                         AgentTurn(1, "list_changed_files", "files", "checkout.py"),
                         AgentTurn(2, "read_file_diff", "checkout.py", "removed upper bound"),
-                        AgentTurn(3, "write_temp_test", "boundary test", str(generated.path)),
+                        AgentTurn(3, "publish_test_plan", "boundary plan", "published"),
+                        AgentTurn(4, "write_temp_test", "boundary test", str(generated.path)),
                     ]
                 )
                 result = tools.run_test_command("python -m unittest tests.test_agent_generated_discount_boundary -v")
-                record.agent_turns.append(AgentTurn(4, "run_test_command", result.command, "exit 1"))
+                record.agent_turns.append(AgentTurn(5, "run_test_command", result.command, "exit 1"))
                 tools.read_test_log(1)
-                record.agent_turns.append(AgentTurn(5, "read_test_log", "1", "failure log"))
+                record.agent_turns.append(AgentTurn(6, "read_test_log", "1", "failure log"))
                 return AgentPlannerResult(final_output="Agent final decision: generated test exposes regression.", used_model=True)
 
             with patch("ai_test_officer.execution.runner.run_agent_planner", side_effect=fake_agent):

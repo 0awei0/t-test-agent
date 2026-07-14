@@ -275,7 +275,7 @@ def _run_planner(config: RunConfig, record: RunRecord, tools: AgentRunTools) -> 
 def _validate_agent_strict(config: RunConfig, record: RunRecord) -> None:
     if config.planner_mode != "agent-strict":
         return
-    required = ["list_changed_files", "read_file_diff", "write_temp_test", "run_test_command"]
+    required = ["list_changed_files", "read_file_diff", "publish_test_plan", "write_temp_test", "run_test_command"]
     if any(command.returncode != 0 for command in record.commands):
         required.append("read_test_log")
     observed = [turn.tool for turn in record.agent_turns]

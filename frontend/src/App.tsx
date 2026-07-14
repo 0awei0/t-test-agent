@@ -16,9 +16,13 @@ import type {
   EvidenceEvent,
   IsolationEvent,
   MemoryEvent,
+  PlanUpdateEvent,
   PhaseName,
   ProvenanceEvent,
   SafetyCheckEvent,
+  TestPlanEvent,
+  TestPlanItem,
+  TestPlanStatus,
   ToolCallEvent,
   VerdictEvent,
 } from "./types";
@@ -29,6 +33,7 @@ import { EvidenceGrid } from "./components/EvidenceGrid";
 import { FailureBanner } from "./components/FailureBanner";
 import { Timeline } from "./components/Timeline";
 import { StrategyPanel } from "./components/StrategyPanel";
+import { TestPlanBoard } from "./components/TestPlanBoard";
 
 const PHASE_ORDER: PhaseName[] = [
   "checkout",
@@ -45,6 +50,22 @@ const PHASE_LABELS: Record<PhaseName, string> = {
   validating: "校验结果",
   reporting: "生成报告",
 };
+
+function planStatusFromCommand(status: CommandEvent["status"]): TestPlanStatus {
+  if (status === "start") return "running";
+  if (status === "ok") return "passed";
+  if (status === "blocked") return "blocked";
+  return "failed";
+}
+
+function describeCommand(command: string): Pick<TestPlanItem, "title" | "layer" | "target" | "evidence"> {
+  const normalized = command.toLowerCase();
+  if (normalized.includes("agent_generated")) return { title: "Agent 补充边界测试", layer: "动态补测", target: "失败归因后的新增回归场景", evidence: "生成测试与命令日志" };
+  if (normalized.includes("browser") || normalized.includes("playwright")) return { title: "浏览器主链验证", layer: "浏览器测试", target: "页面交互与服务端策略一致性", evidence: "命令日志与页面截图" };
+  if (normalized.includes("api")) return { title: "接口契约验证", layer: "接口测试", target: "接口状态码、响应与业务约束", evidence: "接口测试日志" };
+  if (normalized.includes("security") || normalized.includes("safety")) return { title: "安全边界验证", layer: "安全测试", target: "敏感信息与执行权限边界", evidence: "安全策略日志" };
+  return { title: "业务规则回归", layer: "单元测试", target: "核心业务规则与边界条件", evidence: "单元测试日志" };
+}
 
 function useRunId(): string {
   const params = new URLSearchParams(window.location.search);
@@ -144,6 +165,11 @@ export default function App() {
   const [commands, setCommands] = useState<Record<string, CommandEvent>>({});
   const [toolCalls, setToolCalls] = useState<Record<string, ToolCallEvent>>({});
   const [plannerSteps, setPlannerSteps] = useState<string[]>([]);
+  const [testPlanItems, setTestPlanItems] = useState<TestPlanItem[]>([]);
+  const [testPlanSummary, setTestPlanSummary] = useState("");
+  const [structuredPlan, setStructuredPlan] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [focusedCommand, setFocusedCommand] = useState("");
   const [task, setTask] = useState("");
   const [changedFiles, setChangedFiles] = useState<{ status: string; path: string }[]>([]);
   const [evidence, setEvidence] = useState<EvidenceEvent[]>([]);
@@ -167,6 +193,11 @@ export default function App() {
       setCommands({});
       setToolCalls({});
       setPlannerSteps([]);
+      setTestPlanItems([]);
+      setTestPlanSummary("");
+      setStructuredPlan(false);
+      setSelectedPlanId("");
+      setFocusedCommand("");
       setTask("");
       setChangedFiles([]);
       setEvidence([]);
@@ -198,6 +229,22 @@ export default function App() {
             break;
           case "command":
             setCommands((prev) => ({ ...prev, [d.id as string]: d as unknown as CommandEvent }));
+            setTestPlanItems((prev) => {
+              const command = String(d.command ?? "");
+              const matched = prev.findIndex((item) => item.command === command);
+              const status = planStatusFromCommand(String(d.status ?? "start") as CommandEvent["status"]);
+              if (matched >= 0) {
+                return prev.map((item, index) => index === matched ? { ...item, status, detail: status === "failed" ? `exit ${String(d.returncode ?? 1)}` : item.detail } : item);
+              }
+              const description = describeCommand(command);
+              return [...prev, {
+                id: `observed-${String(d.id ?? prev.length + 1)}`,
+                ...description,
+                command,
+                status,
+                adaptive: command.toLowerCase().includes("agent_generated"),
+              }];
+            });
             break;
           case "tool_call":
             setToolCalls((prev) => ({ ...prev, [d.id as string]: d as unknown as ToolCallEvent }));
@@ -205,6 +252,33 @@ export default function App() {
           case "planner":
             setPlannerSteps((prev) => [...prev, String(d.step ?? "")]);
             break;
+          case "test_plan": {
+            const plan = d as unknown as TestPlanEvent;
+            setStructuredPlan(true);
+            setTestPlanSummary(String(plan.summary ?? ""));
+            setTestPlanItems(Array.isArray(plan.items) ? plan.items.map((item) => ({ ...item, adaptive: Boolean(item.adaptive), status: "planned" })) : []);
+            break;
+          }
+          case "plan_update": {
+            const update = d as unknown as PlanUpdateEvent;
+            setSelectedPlanId((current) => update.status === "running" ? update.id : current);
+            setTestPlanItems((prev) => {
+              const matched = prev.findIndex((item) => item.id === update.id || (update.command && item.command === update.command));
+              if (matched >= 0) {
+                return prev.map((item, index) => index === matched ? { ...item, status: update.status, detail: update.detail || item.detail, command: update.command || item.command, adaptive: Boolean(update.adaptive || item.adaptive) } : item);
+              }
+              const command = String(update.command ?? "");
+              return [...prev, {
+                id: update.id,
+                ...describeCommand(command),
+                command,
+                status: update.status,
+                detail: update.detail,
+                adaptive: Boolean(update.adaptive),
+              }];
+            });
+            break;
+          }
           case "evidence":
             setEvidence((prev) =>
               prev.some((e) => e.path === (d.path as string))
@@ -256,6 +330,15 @@ export default function App() {
     () => effectiveCommandList.filter((c) => c.status === "fail" || c.status === "blocked"),
     [effectiveCommandList]
   );
+
+  const selectPlanItem = (item: TestPlanItem) => {
+    setSelectedPlanId(item.id);
+    setFocusedCommand(item.command);
+    const index = effectiveCommandList.findIndex((command) => command.command === item.command);
+    if (index >= 0) {
+      window.setTimeout(() => document.getElementById(`command-${index}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+    }
+  };
 
   useEffect(() => {
     if (failures.length > 0 && failureRef.current) {
@@ -335,6 +418,14 @@ export default function App() {
 
       <VerdictHero verdict={verdict} running={running} failures={failures.length} commands={commandList.length} changedFiles={changedFiles.length} evidence={evidence.length} />
 
+      <TestPlanBoard
+        items={testPlanItems}
+        summary={testPlanSummary}
+        structured={structuredPlan}
+        selectedId={selectedPlanId}
+        onSelect={selectPlanItem}
+      />
+
       <section className="grid2 execution-grid">
         <div className="panel">
           <h2>Agent 工具调用 {toolCallList.length > 0 && <span className="count">{toolCallList.length}</span>}</h2>
@@ -372,7 +463,7 @@ export default function App() {
 
       <section className="panel">
         <h2>测试命令执行 {commandList.length > 0 && <span className="count">{commandList.length}</span>}</h2>
-        <CommandList commands={commandList} runId={runId} />
+        <CommandList commands={commandList} runId={runId} focusedCommand={focusedCommand} />
       </section>
 
       <section className="panel">

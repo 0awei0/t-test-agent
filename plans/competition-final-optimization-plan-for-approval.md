@@ -99,6 +99,7 @@ Validate the complete competition replay package
 - [x] `task-45` 能播放到最终结论，并出现工具、策略、命令、证据、上下文摘要和隔离区域。
 - [x] 一个通过案例显示 `pass/low`，一个阻断案例显示 `fail/high`。
 - [x] 静态部署路径下刷新回放页仍能加载对应资源。
+- [x] 回放页增加 Agent 测试计划执行板，并与真实命令状态和定位交互联动。
 - [x] 390px 移动端视口无横向溢出，主要操作和发布结论可见。
 - [x] 将 E2E 纳入 `competition_check.sh`。
 

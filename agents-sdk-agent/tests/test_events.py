@@ -39,6 +39,33 @@ class EventSinkTests(unittest.TestCase):
         self.assertEqual(events[2]["data"]["verdict"], "fail")
         self.assertEqual(events[3]["type"], "done")
 
+    def test_emits_structured_test_plan_and_live_update(self) -> None:
+        self.sink.test_plan(
+            summary="覆盖优惠边界和 API 契约",
+            items=[
+                {
+                    "id": "plan-1",
+                    "title": "优惠边界单测",
+                    "layer": "单元测试",
+                    "target": "Coupon Policy",
+                    "command": "python -m unittest tests.test_orders -v",
+                    "evidence": "命令日志",
+                    "adaptive": False,
+                }
+            ],
+        )
+        self.sink.plan_update(
+            id="plan-1",
+            status="failed",
+            detail="exit 1",
+            command="python -m unittest tests.test_orders -v",
+        )
+
+        events = self._read()
+        self.assertEqual([event["type"] for event in events], ["test_plan", "plan_update"])
+        self.assertEqual(events[0]["data"]["items"][0]["layer"], "单元测试")
+        self.assertEqual(events[1]["data"]["status"], "failed")
+
     def test_emits_memory_and_isolation_capabilities(self) -> None:
         self.sink.isolation()
         self.sink.memory("structured", 10_000, 3_000, 0.3, 4)

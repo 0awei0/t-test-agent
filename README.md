@@ -283,6 +283,7 @@ certificate work are only needed for a formal business domain.
 
 - 阶段进度条（准备→规划→执行→校验→报告）
 - 工具调用时间线（实时 spinner / ✓ / ✗，淡入滚动）
+- Agent 测试计划执行板（计划项状态、失败驱动补测、命令定位联动）
 - 策略形成面板（为什么测这些）
 - Agent 运行来源（运行模式、严格工具检查、模型自主工具数和生成测试数）
 - 静态回放控制（暂停、倍速、重新播放、跳到结论和事件进度）
@@ -335,7 +336,7 @@ npm run typecheck  # 可选：类型检查
 https://<your-fue-domain>/dashboard/?mode=static
 ```
 
-仪表盘在该模式下逐步播放同目录的 `events.jsonl`，完整还原 Agent 阶段、工具调用、
+仪表盘在该模式下逐步播放同目录的 `events.jsonl`，完整还原 Agent 测试计划、阶段、工具调用、
 策略形成、失败定位与证据网格（详见导出包内的 `FUE_DEPLOY.md`）。线上静态包不持有
 模型密钥；真正的一键执行只在上述本地任务工作台中启用。
 

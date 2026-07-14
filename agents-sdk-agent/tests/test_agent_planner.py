@@ -8,12 +8,26 @@ from pathlib import Path
 from typing import get_origin
 from unittest.mock import patch
 
-from ai_test_officer.agent.planner import _LiveRunHooks, _planner_timeout, run_agent_planner
+from ai_test_officer.agent.planner import _LiveRunHooks, _matching_plan_ids, _planner_timeout, run_agent_planner
 from ai_test_officer.models import ChangedFile, CommandResult, RunRecord
 from ai_test_officer.tools import AgentRunTools, LocalTestTools
 
 
 class AgentPlannerTests(unittest.TestCase):
+    def test_matches_aggregated_unittest_command_to_planned_modules(self) -> None:
+        planned = {
+            "python -m unittest tests.test_coupon -v": "plan-1",
+            "python -m unittest tests.test_stock -v": "plan-2",
+            "python -m unittest tests.test_browser -v": "plan-3",
+        }
+
+        matched = _matching_plan_ids(
+            "python -m unittest tests.test_coupon tests.test_stock -v",
+            planned,
+        )
+
+        self.assertEqual(matched, ["plan-1", "plan-2"])
+
     def test_planner_timeout_is_safe_in_background_thread(self) -> None:
         errors: list[Exception] = []
 
@@ -101,10 +115,15 @@ class AgentPlannerTests(unittest.TestCase):
         observed: dict[str, str] = {}
 
         def exercise_tools(agent, prompt, max_turns=12, hooks=None, **kwargs):
-            first = agent.tools[5]("python -m unittest tests.test_one -v")
-            observed["blocked"] = agent.tools[5]("python -m unittest tests.test_two -v")
-            agent.tools[6](1)
-            observed["after_read"] = agent.tools[5]("python -m unittest tests.test_two -v")
+            agent.tools[5](
+                "验证失败日志约束",
+                '[{"title":"测试一","layer":"单元测试","target":"one","command":"python -m unittest tests.test_one -v","evidence":"日志"},'
+                '{"title":"测试二","layer":"单元测试","target":"two","command":"python -m unittest tests.test_two -v","evidence":"日志"}]',
+            )
+            first = agent.tools[6]("python -m unittest tests.test_one -v")
+            observed["blocked"] = agent.tools[6]("python -m unittest tests.test_two -v")
+            agent.tools[7](1)
+            observed["after_read"] = agent.tools[6]("python -m unittest tests.test_two -v")
             return types.SimpleNamespace(final_output=first)
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -170,7 +189,12 @@ def _fake_agents_modules(run_sync_override=None):
             assert max_turns == 21
             agent.tools[0]()
             agent.tools[1]("tests/test_ok.py")
-            agent.tools[5]("uv run python -m unittest discover -s tests -p test_*.py -v")
+            agent.tools[5](
+                "验证 Python 单元测试",
+                '[{"title":"Python 单元测试","layer":"单元测试","target":"tests",'
+                '"command":"uv run python -m unittest discover -s tests -p test_*.py -v","evidence":"命令日志"}]',
+            )
+            agent.tools[6]("uv run python -m unittest discover -s tests -p test_*.py -v")
             return types.SimpleNamespace(final_output="planned")
 
     def function_tool(strict_mode=False):

@@ -182,6 +182,36 @@ def run_agent_planner(
         trace(f"get_package_scripts:{package_json_path}", package_json_path, output)
         return output
 
+    planned_commands: dict[str, str] = {}
+    plan_published = False
+    adaptive_plan_counter = 0
+
+    @function_tool(strict_mode=False)
+    def publish_test_plan(summary: str, items_json: str) -> str:
+        """Publish a structured test plan before running tests.
+
+        ``items_json`` must be a JSON array. Each item contains ``title``,
+        ``layer``, ``target``, ``command`` and ``evidence``.
+        """
+        nonlocal plan_published
+        try:
+            items = _parse_test_plan(items_json)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            output = json.dumps({"error": f"invalid test plan: {exc}"}, ensure_ascii=False)
+            trace("publish_test_plan", summary, output)
+            return output
+        planned_commands.clear()
+        planned_commands.update({str(item["command"]): str(item["id"]) for item in items})
+        plan_published = True
+        if sink is not None:
+            sink.test_plan(summary=summary[:240], items=items)
+        output = json.dumps(
+            {"status": "published", "items": len(items), "next": "run the planned test commands"},
+            ensure_ascii=False,
+        )
+        trace("publish_test_plan", summary, output)
+        return output
+
     run_test_command_tool_kwargs = (
         {"tool_input_guardrails": [safe_test_command]} if safe_test_command is not None else {}
     )
@@ -193,6 +223,16 @@ def run_agent_planner(
     @function_tool(strict_mode=False, **run_test_command_tool_kwargs)
     def run_test_command(command: str) -> str:
         """Run a whitelisted test command in the isolated workspace repo."""
+        nonlocal adaptive_plan_counter
+        if not plan_published:
+            return json.dumps(
+                {
+                    "command": command,
+                    "error": "publish the structured test plan before running test commands",
+                    "next_required_tool": "publish_test_plan",
+                },
+                ensure_ascii=False,
+            )
         if unread_failure_logs:
             command_id = min(unread_failure_logs)
             return json.dumps(
@@ -204,7 +244,21 @@ def run_agent_planner(
                 ensure_ascii=False,
             )
         cid = f"c{len(record.commands) + 1}"
+        plan_ids = _matching_plan_ids(command, planned_commands)
+        adaptive = not plan_ids
+        if adaptive:
+            adaptive_plan_counter += 1
+            plan_ids = [f"adaptive-{adaptive_plan_counter}"]
+            planned_commands[command] = plan_ids[0]
         if sink is not None:
+            for plan_id in plan_ids:
+                sink.plan_update(
+                    id=plan_id,
+                    status="running",
+                    detail="Agent 根据执行结果动态新增验证" if adaptive else "开始执行计划项",
+                    command=command,
+                    adaptive=adaptive,
+                )
             sink.command(cid, command, "start", category="agent")
         try:
             result = tools.run_test_command(command)
@@ -222,6 +276,14 @@ def run_agent_planner(
             record.planner_trace.append(f"tool-error:run_test_command:{exc}")
             if sink is not None:
                 sink.command(cid, command, "blocked", category="agent")
+                for plan_id in plan_ids:
+                    sink.plan_update(
+                        id=plan_id,
+                        status="blocked",
+                        detail=str(exc),
+                        command=command,
+                        adaptive=adaptive,
+                    )
             output = json.dumps({"command": command, "error": str(exc)}, ensure_ascii=False)
             trace(f"run_test_command:{command}", command, output)
             return output
@@ -229,6 +291,14 @@ def run_agent_planner(
             record.planner_trace.append(f"tool-error:run_test_command:{exc}")
             if sink is not None:
                 sink.command(cid, command, "fail", category="agent", returncode=-1)
+                for plan_id in plan_ids:
+                    sink.plan_update(
+                        id=plan_id,
+                        status="failed",
+                        detail=str(exc),
+                        command=command,
+                        adaptive=adaptive,
+                    )
             output = json.dumps({"command": command, "error": str(exc)}, ensure_ascii=False)
             trace(f"run_test_command:{command}", command, output)
             return output
@@ -255,6 +325,14 @@ def run_agent_planner(
                 returncode=result.returncode,
                 log_path=str(result.log_path.relative_to(record.run_dir)),
             )
+            for plan_id in plan_ids:
+                sink.plan_update(
+                    id=plan_id,
+                    status="passed" if result.returncode == 0 else "failed",
+                    detail="验证通过" if result.returncode == 0 else f"exit {result.returncode}，等待读取失败日志",
+                    command=command,
+                    adaptive=adaptive,
+                )
         trace(f"run_test_command:{command}", command, output)
         return output
 
@@ -310,6 +388,7 @@ def run_agent_planner(
             read_file,
             search_repo,
             get_package_scripts,
+            publish_test_plan,
             run_test_command,
             read_test_log,
             write_temp_test,
@@ -389,6 +468,10 @@ Required behavior:
 - First call list_changed_files.
 - Read relevant diffs before selecting commands.
 - If package.json files are relevant, call get_package_scripts.
+- After reading relevant diffs and before any run_test_command call, call
+  publish_test_plan exactly once. Pass a concise Chinese summary and a JSON array
+  of no more than 8 planned checks. Every item must include title, layer, target,
+  command and expected evidence. Use the exact safe command that you intend to run.
 - When changed files include an HTML/CSS/JS UI surface, you must run an existing
   Playwright/unittest browser test before finalizing and preserve its screenshot evidence.
   Unit or API tests do not replace this browser check.
@@ -451,6 +534,64 @@ def _npm_prefix(command: str) -> str | None:
     if len(parts) >= 4 and parts[0] == "npm" and parts[1] == "test" and parts[2] == "--prefix":
         return parts[3]
     return None
+
+
+def _parse_test_plan(items_json: str) -> list[dict[str, object]]:
+    raw = json.loads(items_json)
+    if not isinstance(raw, list) or not raw:
+        raise ValueError("items_json must be a non-empty JSON array")
+    if len(raw) > 8:
+        raise ValueError("test plan supports at most 8 items")
+    items: list[dict[str, object]] = []
+    seen_commands: set[str] = set()
+    for index, value in enumerate(raw, 1):
+        if not isinstance(value, dict):
+            raise ValueError(f"item {index} must be an object")
+        command = str(value.get("command") or "").strip()
+        if not command:
+            raise ValueError(f"item {index} is missing command")
+        validate_test_command(command)
+        if command in seen_commands:
+            continue
+        seen_commands.add(command)
+        items.append(
+            {
+                "id": f"plan-{len(items) + 1}",
+                "title": str(value.get("title") or f"验证项 {index}")[:100],
+                "layer": str(value.get("layer") or "自动测试")[:40],
+                "target": str(value.get("target") or command)[:160],
+                "command": command,
+                "evidence": str(value.get("evidence") or "命令日志")[:100],
+                "adaptive": False,
+            }
+        )
+    if not items:
+        raise ValueError("test plan has no unique commands")
+    return items
+
+
+def _matching_plan_ids(command: str, planned_commands: dict[str, str]) -> list[str]:
+    exact = planned_commands.get(command)
+    if exact is not None:
+        return [exact]
+    actual_targets = _unittest_targets(command)
+    if not actual_targets:
+        return []
+    matches: list[str] = []
+    for planned, plan_id in planned_commands.items():
+        targets = _unittest_targets(planned)
+        if targets and targets.issubset(actual_targets) and plan_id not in matches:
+            matches.append(plan_id)
+    return matches
+
+
+def _unittest_targets(command: str) -> set[str]:
+    parts = command.split()
+    try:
+        start = parts.index("unittest") + 1
+    except ValueError:
+        return set()
+    return {part for part in parts[start:] if not part.startswith("-") and part not in {"discover"}}
 
 
 def _summarize_output(output: str) -> str:
