@@ -254,9 +254,13 @@ class ReportSiteTests(unittest.TestCase):
                 encoding="utf-8",
             )
             replay_runs = {"task-45": ("release-guard", run_dir)}
+            frontend_dist = root / "frontend-dist"
+            frontend_dist.mkdir()
+            (frontend_dist / "index.html").write_text("<html><head></head><body>dashboard</body></html>", encoding="utf-8")
 
             local = write_local_replay_catalog(root / "runs", replay_runs, default_task_id="task-45")
-            manifest = export_replay_catalog(replay_runs, root / "public", default_task_id="task-45")
+            with patch("ai_test_officer.report_site.FRONTEND_DIST", frontend_dist):
+                manifest = export_replay_catalog(replay_runs, root / "public", default_task_id="task-45")
 
             self.assertEqual(json.loads(local.read_text())["default_task_id"], "task-45")
             exported = json.loads(manifest.read_text())
@@ -264,6 +268,10 @@ class ReportSiteTests(unittest.TestCase):
             self.assertEqual(exported["items"][0]["compression_ratio"], 0.4)
             self.assertTrue((root / "public" / "replays" / "task-45" / "events.jsonl").exists())
             self.assertTrue((root / "public" / "replays" / "task-45" / "evidence" / "shot.png").exists())
+            self.assertIn(
+                'name="ai-test-officer-runtime" content="static"',
+                (root / "public" / "index.html").read_text(encoding="utf-8"),
+            )
 
 
 if __name__ == "__main__":

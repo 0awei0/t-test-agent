@@ -31,10 +31,10 @@ class ReplayGateTests(unittest.TestCase):
             with self.assertRaisesRegex(ReleaseGateError, "forbidden content"):
                 validate_replay_package(manifest, runs_root, public_root)
 
-    def test_rejects_default_replay_without_structured_test_plan(self) -> None:
+    def test_rejects_any_replay_without_structured_test_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             manifest, runs_root, public_root = self._package(Path(tmp))
-            events_path = runs_root / DEFAULT_REPLAY_TASK_ID / "events.jsonl"
+            events_path = runs_root / "task-43" / "events.jsonl"
             events = [
                 line
                 for line in events_path.read_text(encoding="utf-8").splitlines()
@@ -66,9 +66,9 @@ class ReplayGateTests(unittest.TestCase):
                 "agent_final_output": "Decision ready.",
             }
             (run_dir / "run.json").write_text(json.dumps(run), encoding="utf-8")
-            event_types = {"isolation", "tool_call", "verdict", "done"}
+            event_types = {"isolation", "test_plan", "plan_update", "tool_call", "verdict", "done"}
             if spec.task_id == DEFAULT_REPLAY_TASK_ID:
-                event_types.update({"context", "planner", "test_plan", "plan_update", "command", "evidence", "memory"})
+                event_types.update({"context", "planner", "command", "evidence", "memory"})
             events = "\n".join(
                 json.dumps({"seq": index, "type": event_type, "data": {}})
                 for index, event_type in enumerate(sorted(event_types), 1)

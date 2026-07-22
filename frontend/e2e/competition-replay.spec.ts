@@ -19,6 +19,18 @@ test("keeps eight TAPD and MR tasks mapped to their own replay", async ({ page }
   await expect(page.locator("a.replay-button")).toHaveAttribute("href", /replay=task-43/);
 });
 
+test("static package launcher does not probe local execution APIs", async ({ page }) => {
+  test.skip(!process.env.COMPETITION_PACKAGE_DIR, "requires an exported static package");
+  const apiRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.startsWith("/api/")) apiRequests.push(request.url());
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".task-card")).toHaveCount(8);
+  expect(apiRequests).toEqual([]);
+});
+
 test("replays pass and blocked decisions with Agent evidence", async ({ page }) => {
   await page.goto("/?mode=static&replay=task-45");
   await expect(page.getByText("建议阻断", { exact: true })).toBeVisible();

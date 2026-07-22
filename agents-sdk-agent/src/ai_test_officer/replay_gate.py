@@ -24,6 +24,15 @@ COMPLEX_EVENT_TYPES = {
     "done",
 }
 
+REQUIRED_REPLAY_EVENT_TYPES = {
+    "isolation",
+    "test_plan",
+    "plan_update",
+    "tool_call",
+    "verdict",
+    "done",
+}
+
 
 def validate_replay_package(manifest_path: Path, runs_root: Path, public_root: Path) -> None:
     manifest = _read_json_object(manifest_path, "replay manifest")
@@ -49,10 +58,12 @@ def validate_replay_package(manifest_path: Path, runs_root: Path, public_root: P
             expected_risk=spec.expected_risk,
             require_agent_tools=True,
         )
-        required_events = COMPLEX_EVENT_TYPES if task_id == DEFAULT_REPLAY_TASK_ID else {"isolation", "tool_call", "verdict", "done"}
+        required_events = COMPLEX_EVENT_TYPES if task_id == DEFAULT_REPLAY_TASK_ID else REQUIRED_REPLAY_EVENT_TYPES
         _validate_events(run_dir / "events.jsonl", required_events)
         public_events = _validate_public_replay(public_root / "replays" / task_id)
         _expect("provenance" in public_events, f"{task_id} public replay is missing provenance")
+        _expect("test_plan" in public_events, f"{task_id} public replay is missing test plan")
+        _expect("plan_update" in public_events, f"{task_id} public replay is missing test plan progress")
         if task_id == DEFAULT_REPLAY_TASK_ID:
             _expect("adaptation" in public_events, f"{task_id} public replay is missing failure-driven adaptation")
         if task_id == "task-53":

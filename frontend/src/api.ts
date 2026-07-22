@@ -41,7 +41,7 @@ export interface StreamHandle {
 }
 
 export async function getReplayCatalog(): Promise<ReplayCatalog | null> {
-  const paths = isStaticReplay()
+  const paths = isStaticPackage()
     ? ["replays/manifest.json"]
     : ["/api/replays", "replays/manifest.json"];
   for (const path of paths) {
@@ -57,6 +57,7 @@ export async function getReplayCatalog(): Promise<ReplayCatalog | null> {
 }
 
 export async function getExecutionCapability(): Promise<ExecutionCapability | null> {
+  if (isStaticPackage()) return null;
   try {
     const response = await fetch("/api/capabilities", { cache: "no-store" });
     if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) return null;
@@ -85,6 +86,12 @@ export async function startDemoExecution(scenario: string): Promise<string> {
  * `events.jsonl` (and evidence/report files) as sibling static assets instead
  * of talking to the live SSE server.
  */
+export function isStaticPackage(): boolean {
+  return document
+    .querySelector('meta[name="ai-test-officer-runtime"]')
+    ?.getAttribute("content") === "static";
+}
+
 export function isStaticReplay(): boolean {
   return new URLSearchParams(window.location.search).get("mode") === "static";
 }

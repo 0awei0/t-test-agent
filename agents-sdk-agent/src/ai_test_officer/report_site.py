@@ -16,6 +16,7 @@ from .redaction import redact_secrets
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FRONTEND_DIST = REPO_ROOT / "frontend" / "dist"
+STATIC_RUNTIME_MARKER = '<meta name="ai-test-officer-runtime" content="static">'
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,7 @@ def export_replay_catalog(
     dashboard_root.mkdir(parents=True, exist_ok=True)
     if FRONTEND_DIST.exists():
         shutil.copytree(FRONTEND_DIST, dashboard_root, dirs_exist_ok=True)
+    _mark_static_dashboard(dashboard_root)
     root = dashboard_root / "replays"
     root.mkdir(parents=True, exist_ok=True)
     for task_id, (_, run_dir) in replay_runs.items():
@@ -282,6 +284,7 @@ def _bundle_live_dashboard(
         shutil.copytree(FRONTEND_DIST, dashboard_dir, dirs_exist_ok=True)
     else:
         (dashboard_dir / "index.html").write_text(_fallback_dashboard_html(), encoding="utf-8")
+    _mark_static_dashboard(dashboard_dir)
     _copy_sanitized_events(source_run_dir / "events.jsonl", dashboard_dir / "events.jsonl", run_metadata)
     _copy_sanitized_text_file(source_run_dir / "report.html", dashboard_dir / "report.html", run_metadata)
     for sub in (Path("repo") / "reports" / "evidence", Path("evidence")):
@@ -300,6 +303,21 @@ def _fallback_dashboard_html() -> str:
 <p><a href="report.html">查看测试报告</a> · <a href="events.jsonl">查看脱敏事件</a></p>
 </main></body></html>
 """
+
+
+def _mark_static_dashboard(dashboard_dir: Path) -> None:
+    """Mark an exported dashboard so its launcher never probes local-only APIs."""
+    index_path = dashboard_dir / "index.html"
+    if not index_path.is_file():
+        return
+    html = index_path.read_text(encoding="utf-8")
+    if STATIC_RUNTIME_MARKER in html:
+        return
+    if "</head>" in html:
+        html = html.replace("</head>", f"  {STATIC_RUNTIME_MARKER}\n</head>", 1)
+    else:
+        html = f"{STATIC_RUNTIME_MARKER}\n{html}"
+    index_path.write_text(html, encoding="utf-8")
 
 
 def _copy_sanitized_events(source: Path, target: Path, run_metadata: dict[str, Any]) -> None:

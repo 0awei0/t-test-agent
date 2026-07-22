@@ -228,7 +228,14 @@ export default function App() {
             }
             break;
           case "command":
-            setCommands((prev) => ({ ...prev, [d.id as string]: d as unknown as CommandEvent }));
+            setCommands((prev) => {
+              const command = String(d.command ?? "");
+              // The Agent protocol may reuse a tool-level id for multiple test
+              // commands. Keep each command's latest state instead of letting a
+              // later command erase earlier plan evidence from the timeline.
+              const key = `${String(d.id ?? "command")}:${command}`;
+              return { ...prev, [key]: d as unknown as CommandEvent };
+            });
             setTestPlanItems((prev) => {
               const command = String(d.command ?? "");
               const matched = prev.findIndex((item) => item.command === command);
